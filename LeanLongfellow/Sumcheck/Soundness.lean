@@ -17,7 +17,7 @@ This file proves two results about the soundness of the sumcheck protocol:
 
 open Finset Polynomial MultilinearPoly
 
-variable {F : Type*} [Field F] {n : ℕ}
+variable {F : Type*} [Field F] [DecidableEq F] {n : ℕ}
 
 /-- A nonzero polynomial of degree ≤ 1 has at most 1 root in any finite set. -/
 theorem roots_le_one_of_deg_le_one {p : F[X]} (hp : p ≠ 0) (hdeg : p.natDegree ≤ 1)
@@ -33,7 +33,7 @@ theorem roots_le_one_of_deg_le_one {p : F[X]} (hp : p ≠ 0) (hdeg : p.natDegree
     exact Polynomial.IsRoot.def.mpr hx.2
   -- p.roots.toFinset.card ≤ p.roots.card
   have h2 : p.roots.toFinset.card ≤ p.roots.card :=
-    Multiset.toFinset_card_le_card p.roots
+    Multiset.toFinset_card_le p.roots
   -- p.roots.card ≤ p.natDegree ≤ 1
   have h3 : p.roots.card ≤ p.natDegree :=
     Polynomial.card_roots' p
