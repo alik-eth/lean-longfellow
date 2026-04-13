@@ -1,5 +1,6 @@
 import Mathlib.Data.Fintype.Pi
-import Mathlib.Algebra.BigOperators.Group.Finset
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 
 open Finset
 
