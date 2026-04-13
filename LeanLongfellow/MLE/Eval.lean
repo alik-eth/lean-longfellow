@@ -1,6 +1,7 @@
 import LeanLongfellow.MLE.Defs
 import Mathlib.Algebra.BigOperators.GroupWithZero.Finset
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Data.Fin.Tuple.Basic
 
@@ -49,28 +50,27 @@ def partialEvalFirst (p : MultilinearPoly F (n + 1)) (a : F) : MultilinearPoly F
     This is the honest prover's message in each sumcheck round.
     `sumFirstVar p = C(c₀) + X · C(c₁ - c₀)` where
     `c₀ = ∑_b p.table(0::b)`, `c₁ = ∑_b p.table(1::b)`. -/
-def sumFirstVar (p : MultilinearPoly F (n + 1)) : Polynomial F :=
+noncomputable def sumFirstVar (p : MultilinearPoly F (n + 1)) : Polynomial F :=
   let c0 := ∑ b : Fin n → Bool, p.table (Fin.cons false b)
   let c1 := ∑ b : Fin n → Bool, p.table (Fin.cons true b)
   Polynomial.C c0 + Polynomial.X * Polynomial.C (c1 - c0)
 
 theorem sumFirstVar_eval_zero (p : MultilinearPoly F (n + 1)) :
     (sumFirstVar p).eval 0 = ∑ b : Fin n → Bool, p.table (Fin.cons false b) := by
-  simp [sumFirstVar, Polynomial.eval_add, Polynomial.eval_mul, Polynomial.eval_C, Polynomial.eval_X]
+  simp [sumFirstVar, Polynomial.eval_add, Polynomial.eval_mul,
+    Polynomial.eval_X, Polynomial.eval_finset_sum, Polynomial.eval_C]
 
 theorem sumFirstVar_eval_one (p : MultilinearPoly F (n + 1)) :
     (sumFirstVar p).eval 1 = ∑ b : Fin n → Bool, p.table (Fin.cons true b) := by
-  simp [sumFirstVar, Polynomial.eval_add, Polynomial.eval_mul, Polynomial.eval_C, Polynomial.eval_X]
-  ring
+  simp [sumFirstVar, Polynomial.eval_add, Polynomial.eval_mul,
+    Polynomial.eval_X, Polynomial.eval_finset_sum, Polynomial.eval_C]
 
 theorem lagrangeBasis_cons (b₀ : Bool) (b : Fin n → Bool) (a : F) (x : Fin n → F) :
     lagrangeBasis (Fin.cons b₀ b) (Fin.cons a x) =
       (if b₀ then a else 1 - a) * lagrangeBasis b x := by
   simp only [lagrangeBasis]
   rw [Fin.prod_univ_succ]
-  congr 1
-  · simp [Fin.cons_zero]
-  · congr 1; ext i; simp [Fin.cons_succ]
+  simp [Fin.cons_zero, Fin.cons_succ]
 
 theorem partialEval_table_sum (p : MultilinearPoly F (n + 1)) (r : F) :
     (∑ b : Fin n → Bool, (partialEvalFirst p r).table b) = (sumFirstVar p).eval r := by
@@ -83,17 +83,22 @@ theorem partialEval_table_sum (p : MultilinearPoly F (n + 1)) (r : F) :
 theorem partialEvalFirst_eval (p : MultilinearPoly F (n + 1)) (r : F) (x : Fin n → F) :
     (partialEvalFirst p r).eval x = p.eval (Fin.cons r x) := by
   simp only [eval, partialEvalFirst]
-  -- LHS: ∑ b, ((1-r) * p.table(false::b) + r * p.table(true::b)) * lagrangeBasis b x
-  -- RHS: ∑ b', p.table b' * lagrangeBasis b' (cons r x)
-  -- Decompose RHS using Fin.consEquiv
+  -- Decompose RHS sum over Fin (n+1) → Bool into sum over Bool × (Fin n → Bool)
   have hrhs : ∑ b' : Fin (n + 1) → Bool, p.table b' * lagrangeBasis b' (Fin.cons r x) =
       ∑ b₀ : Bool, ∑ b : Fin n → Bool,
         p.table (Fin.cons b₀ b) * lagrangeBasis (Fin.cons b₀ b) (Fin.cons r x) := by
-    rw [← (Fin.consEquiv (fun _ => Bool)).symm.sum_comp]
-    simp [Fin.consEquiv, Fintype.sum_prod_type]
+    trans ∑ p_1 : Bool × (Fin n → Bool),
+        p.table (Fin.cons p_1.1 p_1.2) * lagrangeBasis (Fin.cons p_1.1 p_1.2) (Fin.cons r x)
+    · apply Fintype.sum_equiv (Fin.consEquiv (fun _ => Bool)).symm
+      intro p_1
+      simp [Fin.consEquiv]
+    · exact Fintype.sum_prod_type _
   rw [hrhs]
   simp only [lagrangeBasis_cons]
-  simp only [Bool.false_eq_true, ↓reduceIte, Bool.true_eq_true]
-  ring
+  simp only [Fintype.sum_bool]
+  simp only [Bool.false_eq_true, ite_false, ite_true]
+  rw [← Finset.sum_add_distrib]
+  apply Finset.sum_congr rfl
+  intros; ring
 
 end MultilinearPoly
