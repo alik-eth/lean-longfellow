@@ -62,11 +62,14 @@ lean-longfellow/
 structure MultilinearPoly (F : Type*) [Field F] (n : ℕ) where
   /-- Evaluations at all points in {0,1}^n -/
   evals : (Fin n → F) → F
-  /-- The function is multilinear: linear in each variable when others are fixed -/
-  is_multilinear : ∀ (i : Fin n) (x : Fin n → F) (a b c : F),
-    c = a + b →
-    evals (Function.update x i c) =
+  /-- Additive: f(x with x_i = a+b) = f(x with x_i = a) + f(x with x_i = b) -/
+  is_additive : ∀ (i : Fin n) (x : Fin n → F) (a b : F),
+    evals (Function.update x i (a + b)) =
       evals (Function.update x i a) + evals (Function.update x i b)
+  /-- Homogeneous: f(x with x_i = c*a) = c * f(x with x_i = a) -/
+  is_homogeneous : ∀ (i : Fin n) (x : Fin n → F) (c a : F),
+    evals (Function.update x i (c * a)) =
+      c * evals (Function.update x i a)
 ```
 
 ### Definitions
