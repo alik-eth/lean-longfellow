@@ -92,3 +92,38 @@ theorem combiningPoly_sum (layer : CircuitLayer F s)
         V_curr.table g from by rw [← hcons g]]
   -- Step 6: Apply eqPoly_select
   exact eqPoly_select t (fun g => V_curr.table g)
+
+/-- Generalized sum theorem: works for any target `t ∈ F^s`, not just Boolean.
+    The sum equals `V_curr.eval t` (MLE evaluation) instead of `V_curr.table t`. -/
+theorem combiningPoly_sum_general (layer : CircuitLayer F s)
+    (t : Fin s → F) (V_curr V_next : LayerValues F s)
+    (hcons : ∀ g, layerConsistent layer V_curr V_next g) :
+    ∑ lr : Fin (2 * s) → Bool,
+      combiningPoly layer t V_next (boolToField lr) =
+    V_curr.eval t := by
+  -- Step 1: Unfold combiningPoly
+  simp only [combiningPoly]
+  -- Step 2: Swap sums: ∑_lr ∑_g → ∑_g ∑_lr
+  rw [Finset.sum_comm]
+  -- Step 3: Factor out eqPoly(t,g) from inner sum
+  conv_lhs =>
+    arg 2; ext g
+    rw [← Finset.mul_sum]
+  -- Step 4: Simplify eval on Boolean inputs
+  conv_lhs =>
+    arg 2; ext g; arg 2; arg 2; ext lr
+    rw [splitL_boolToField, splitR_boolToField]
+    rw [eval_boolVec, eval_boolVec]
+    rw [concat3_boolToField]
+    rw [eval_boolVec, eval_boolVec]
+  -- Step 5: The inner sum now matches layerConsistent
+  conv_lhs =>
+    arg 2; ext g
+    rw [show (∑ lr : Fin (2 * s) → Bool,
+        (layer.add_poly.table (concat3 g (splitL lr) (splitR lr)) *
+          (V_next.table (splitL lr) + V_next.table (splitR lr)) +
+         layer.mul_poly.table (concat3 g (splitL lr) (splitR lr)) *
+          (V_next.table (splitL lr) * V_next.table (splitR lr)))) =
+        V_curr.table g from by rw [← hcons g]]
+  -- Step 6: Apply eqPoly_eval to get V_curr.eval t
+  exact eqPoly_eval t V_curr
