@@ -22,3 +22,4 @@ import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
 import LeanLongfellow.Circuit.Reduction
 import LeanLongfellow.Circuit.Composition
+import LeanLongfellow.Circuit.Gates
