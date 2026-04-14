@@ -7,3 +7,5 @@ import LeanLongfellow.Sumcheck.Completeness
 import LeanLongfellow.Sumcheck.Soundness
 import LeanLongfellow.Field.Basic
 import LeanLongfellow.FiatShamir.Oracle
+import LeanLongfellow.FiatShamir.Transform
+import LeanLongfellow.FiatShamir.Soundness
