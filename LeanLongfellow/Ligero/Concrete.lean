@@ -116,7 +116,7 @@ theorem allAlpha_implies_satisfiesLinear {m n : ℕ}
   intro c
   -- Use the error characterization: actualDot - combinedTarget = ∑ α[c] * rowError[c]
   -- For any α, the error is zero
-  have h_zero : ∀ alpha, ∑ c' : Fin m, alpha c' * rowError w lcs c' = 0 := by
+  have h_zero : ∀ alpha : Fin m → F, ∑ c' : Fin m, alpha c' * rowError w lcs c' = 0 := by
     intro alpha
     have := linearTest_error_eq w lcs alpha
     rw [h alpha, sub_self] at this
@@ -125,6 +125,7 @@ theorem allAlpha_implies_satisfiesLinear {m n : ℕ}
   have h_c := h_zero (fun j => if j = c then 1 else 0)
   simp only [ite_mul, one_mul, zero_mul, Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte] at h_c
   -- h_c : rowError w lcs c = 0, i.e., (∑ j, A[c][j]*w[j]) - target[c] = 0
+  unfold rowError at h_c
   exact sub_eq_zero.mp h_c
 
 /-- The quadratic test condition (combinedQuadError = 0 for all u)
