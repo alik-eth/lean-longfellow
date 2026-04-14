@@ -41,3 +41,6 @@ import LeanLongfellow.Escrow.Defs
 import LeanLongfellow.Escrow.Correctness
 import LeanLongfellow.Merkle.Defs
 import LeanLongfellow.Merkle.Correctness
+import LeanLongfellow.Poseidon.Defs
+import LeanLongfellow.Poseidon.Nullifier
+import LeanLongfellow.Poseidon.HolderBinding
