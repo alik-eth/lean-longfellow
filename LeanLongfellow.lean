@@ -42,6 +42,7 @@ import LeanLongfellow.Circuit.GadgetGates
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
 import LeanLongfellow.Circuit.SHA256
+import LeanLongfellow.Circuit.SHA256Spec
 import LeanLongfellow.Predicate.Defs
 import LeanLongfellow.Predicate.Correctness
 import LeanLongfellow.Escrow.Defs
