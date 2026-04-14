@@ -27,6 +27,7 @@ import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
 import LeanLongfellow.Circuit.Reduction
 import LeanLongfellow.Circuit.Composition
+import LeanLongfellow.Circuit.Probability
 import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
