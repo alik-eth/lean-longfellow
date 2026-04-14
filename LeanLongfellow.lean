@@ -18,6 +18,7 @@ import LeanLongfellow.Ligero.ReedSolomon.Defs
 import LeanLongfellow.Ligero.ReedSolomon.Proximity
 import LeanLongfellow.Ligero.Tableau
 import LeanLongfellow.Ligero.Tests.Linear
+import LeanLongfellow.Ligero.Tests.LowDegree
 import LeanLongfellow.Ligero.Tests.Quadratic
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
