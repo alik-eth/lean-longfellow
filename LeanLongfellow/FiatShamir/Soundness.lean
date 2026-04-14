@@ -14,22 +14,23 @@ variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
 This file proves the main soundness theorem for the Fiat-Shamir transform
 applied to the sumcheck protocol in the Random Oracle Model.
 
-For any non-adaptive adversary, if the claimed sum is wrong, the number of
-challenge vectors that fool the verifier is at most `n * |F|^(n-1)`.
-Dividing by `|F|^n` gives probability bound `n / |F|`.
+For any non-adaptive adversary whose round polynomials have degree ≤ d, if the
+claimed sum is wrong, the number of challenge vectors that fool the verifier is
+at most `n * d * |F|^(n-1)`. Dividing by `|F|^n` gives probability bound
+`n·d / |F|`.
 
 ## Proof outline
 
 1. For each `cs` where `fsVerifierAccepts` holds, unfold to `verifierAccepts`
    and apply `sumcheck_soundness_det` to get a witness round `i` and a nonzero
-   degree-≤-1 difference polynomial `diff` with `diff.eval (cs i) = 0`.
+   degree-≤-d difference polynomial `diff` with `diff.eval (cs i) = 0`.
 
 2. Decompose the bad set by round index using union bound
    (`countSat_union_bound`).
 
-3. For each round `i`, bound the bad set by `|F|^(n-1)` using the fact that
+3. For each round `i`, bound the bad set by `d * |F|^(n-1)` using the fact that
    the difference polynomial is determined by the earlier challenges (by
-   non-adaptivity) and a nonzero degree-≤-1 polynomial has at most one root.
+   non-adaptivity) and a nonzero degree-≤-d polynomial has at most `d` roots.
 -/
 
 /-- Monotonicity of `countSat` with respect to implication. -/
@@ -66,20 +67,22 @@ private theorem honestProver_poly_indep :
       omega
 
 /-- **Fiat-Shamir ROM Soundness.**
-For any non-adaptive adversary, if the claimed sum is wrong,
-the number of challenge vectors that fool the verifier is at most `n * |F|^(n-1)`.
-Dividing by |F|^n gives probability bound n/|F|. -/
-theorem fiatShamir_soundness {n : ℕ}
+For any non-adaptive adversary whose round polynomials have degree ≤ d,
+if the claimed sum is wrong, the number of challenge vectors that fool the
+verifier is at most `n * d * |F|^(n-1)`.
+Dividing by |F|^n gives probability bound n·d/|F|. -/
+theorem fiatShamir_soundness {n : ℕ} {d : ℕ}
     (p : MultilinearPoly F n) (claimed_sum : F)
     (hn : 0 < n)
+    (hd : 1 ≤ d)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
     (adversary : RandomChallenges F n → FiatShamirProof F n)
-    (hdeg : ∀ cs i, ((adversary cs).round_polys i).natDegree ≤ 1)
+    (hdeg : ∀ cs i, ((adversary cs).round_polys i).natDegree ≤ d)
     (h_nonadaptive : ∀ (cs cs' : RandomChallenges F n) (i : Fin n),
       (∀ j : Fin n, j.val < i.val → cs j = cs' j) →
       (adversary cs).round_polys i = (adversary cs').round_polys i) :
     countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs) ≤
-      n * Fintype.card F ^ (n - 1) := by
+      n * (d * Fintype.card F ^ (n - 1)) := by
   -- Per-round bad event using the CONCRETE diff between adversary and honest polys.
   -- The diff at round i: adversary's poly minus honest prover's poly.
   let D : Fin n → RandomChallenges F n → Polynomial F := fun i cs =>
@@ -93,8 +96,8 @@ theorem fiatShamir_soundness {n : ℕ}
     calc countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs)
         ≤ countSat (fun cs => ∃ i : Fin n, Q i cs) :=
           countSat_mono h_sub
-      _ ≤ n * Fintype.card F ^ (n - 1) := by
-          have h_bound : ∀ j : Fin n, countSat (Q j) ≤ Fintype.card F ^ (n - 1) := by
+      _ ≤ n * (d * Fintype.card F ^ (n - 1)) := by
+          have h_bound : ∀ j : Fin n, countSat (Q j) ≤ d * Fintype.card F ^ (n - 1) := by
             intro i
             -- D i cs depends only on coords ≠ i:
             -- - adversary's poly at round i depends on cs j for j < i (non-adaptivity)
@@ -119,12 +122,12 @@ theorem fiatShamir_soundness {n : ℕ}
                   ≤ max ((adversary cs).round_polys i).natDegree
                         ((honestProver p cs i).prover_poly).natDegree :=
                     Polynomial.natDegree_sub_le _ _
-                _ ≤ 1 := Nat.max_le.mpr ⟨hdeg cs i, honestProver_deg_le p cs i⟩
+                _ ≤ d := Nat.max_le.mpr ⟨hdeg cs i, le_trans (honestProver_deg_le p cs i) hd⟩
           exact countSat_union_bound Q h_bound
   -- Step 1 proof: use sumcheck_soundness_concrete to get the concrete diff
   intro cs hfs
   have haccept : verifierAccepts p claimed_sum (toRounds (adversary cs) cs) := hfs
-  have hdeg_rounds : ∀ i : Fin n, (toRounds (adversary cs) cs i).prover_poly.natDegree ≤ 1 :=
+  have hdeg_rounds : ∀ i : Fin n, (toRounds (adversary cs) cs i).prover_poly.natDegree ≤ d :=
     fun i => by simp only [toRounds]; exact hdeg cs i
   obtain ⟨i, hi_ne, hi_eval⟩ :=
     sumcheck_soundness_concrete p claimed_sum (toRounds (adversary cs) cs) hn hclaim haccept hdeg_rounds
