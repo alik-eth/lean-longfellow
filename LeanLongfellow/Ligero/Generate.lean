@@ -111,7 +111,147 @@ theorem sparse_sum_eq {n : ℕ} (claimed_sum : F)
             -(challenges ⟨i.val - 1, by omega⟩) *
               w ⟨2 * (i.val - 1) + 1, by unfold witnessSize; omega⟩
        else 0) := by
-  sorry
+  -- Rewrite each matrix entry using the definition
+  conv_lhs =>
+    arg 2; ext j
+    simp only [generateConstraints]
+  -- Split on whether i > 0
+  by_cases hi0 : (i : ℕ) > 0
+  · -- Case i > 0: 4 nonzero entries
+    simp only [hi0, ↓reduceIte]
+    -- Define the four key indices
+    set a : Fin (witnessSize n) := ⟨2 * i.val, by unfold witnessSize; omega⟩
+    set b : Fin (witnessSize n) := ⟨2 * i.val + 1, by unfold witnessSize; omega⟩
+    set c : Fin (witnessSize n) := ⟨2 * (i.val - 1), by unfold witnessSize; omega⟩
+    set d : Fin (witnessSize n) := ⟨2 * (i.val - 1) + 1, by unfold witnessSize; omega⟩
+    have hab : a ≠ b := by simp [a, b, Fin.ext_iff]
+    have hca : c ≠ a := by simp [c, a, Fin.ext_iff]; omega
+    have hcb : c ≠ b := by simp [c, b, Fin.ext_iff]; omega
+    have hda : d ≠ a := by simp [d, a, Fin.ext_iff]; omega
+    have hdb : d ≠ b := by simp [d, b, Fin.ext_iff]; omega
+    have hcd : c ≠ d := by simp [c, d, Fin.ext_iff]
+    -- Extract term at index a
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ a)]
+    -- Extract term at index b
+    have hb_mem : b ∈ Finset.univ.erase a := by
+      simp [Finset.mem_erase, hab.symm]
+    rw [← Finset.add_sum_erase _ _ hb_mem]
+    -- Extract term at index c
+    have hc_mem : c ∈ (Finset.univ.erase a).erase b := by
+      simp [Finset.mem_erase, hcb, hca]
+    rw [← Finset.add_sum_erase _ _ hc_mem]
+    -- Extract term at index d
+    have hd_mem : d ∈ ((Finset.univ.erase a).erase b).erase c := by
+      simp [Finset.mem_erase, hcd.symm, hdb, hda]
+    rw [← Finset.add_sum_erase _ _ hd_mem]
+    -- Show each if-then-else evaluates correctly
+    have ha_if : (if a.val = 2 * i.val then (1 : F)
+         else if a.val = 2 * i.val + 1 then 1
+         else if True ∧ a.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if True ∧ a.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = 1 := by simp [a]
+    have hb_if : (if b.val = 2 * i.val then (1 : F)
+         else if b.val = 2 * i.val + 1 then 1
+         else if True ∧ b.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if True ∧ b.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = 1 := by simp [b]
+    have hc_if : (if c.val = 2 * i.val then (1 : F)
+         else if c.val = 2 * i.val + 1 then 1
+         else if True ∧ c.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if True ∧ c.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = -(1 - challenges ⟨i.val - 1, by omega⟩) := by
+      have h1 : ¬(c.val = 2 * i.val) := by simp [c]; omega
+      have h2 : ¬(c.val = 2 * i.val + 1) := by simp [c]; omega
+      have h3 : True ∧ c.val = 2 * (i.val - 1) := by simp [c]
+      rw [if_neg h1, if_neg h2, if_pos h3]
+    have hd_if : (if d.val = 2 * i.val then (1 : F)
+         else if d.val = 2 * i.val + 1 then 1
+         else if True ∧ d.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if True ∧ d.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = -(challenges ⟨i.val - 1, by omega⟩) := by
+      have h1 : ¬(d.val = 2 * i.val) := by simp [d]; omega
+      have h2 : ¬(d.val = 2 * i.val + 1) := by simp [d]; omega
+      have h3 : ¬(True ∧ d.val = 2 * (i.val - 1)) := by simp [d]
+      have h4 : True ∧ d.val = 2 * (i.val - 1) + 1 := by simp [d]
+      rw [if_neg h1, if_neg h2, if_neg h3, if_pos h4]
+    rw [ha_if, one_mul, hb_if, one_mul, hc_if, hd_if]
+    -- The remaining sum is zero
+    have hrest : ∑ x ∈ (((Finset.univ.erase a).erase b).erase c).erase d,
+        (if x.val = 2 * i.val then (1 : F)
+         else if x.val = 2 * i.val + 1 then 1
+         else if True ∧ x.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if True ∧ x.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) * w x = 0 := by
+      apply Finset.sum_eq_zero
+      intros j hj
+      have hj_ne_d : j ≠ d := Finset.ne_of_mem_erase hj
+      have hj_ne_c : j ≠ c := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hj)
+      have hj_ne_b : j ≠ b := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase
+        (Finset.mem_of_mem_erase hj))
+      have hj_ne_a : j ≠ a := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase
+        (Finset.mem_of_mem_erase (Finset.mem_of_mem_erase hj)))
+      have hja' : j.val ≠ 2 * i.val := by intro h; exact hj_ne_a (Fin.ext h)
+      have hjb' : j.val ≠ 2 * i.val + 1 := by intro h; exact hj_ne_b (Fin.ext h)
+      have hjc' : j.val ≠ 2 * (i.val - 1) := by intro h; exact hj_ne_c (Fin.ext h)
+      have hjd' : j.val ≠ 2 * (i.val - 1) + 1 := by intro h; exact hj_ne_d (Fin.ext h)
+      simp [hja', hjb', hjc', hjd']
+    rw [hrest, add_zero]
+    ring
+  · -- Case i = 0: 2 nonzero entries
+    simp only [show ¬((i : ℕ) > 0) from hi0, ↓reduceIte, add_zero]
+    -- Define the two key indices
+    set a : Fin (witnessSize n) := ⟨2 * i.val, by unfold witnessSize; omega⟩
+    set b : Fin (witnessSize n) := ⟨2 * i.val + 1, by unfold witnessSize; omega⟩
+    have hab : a ≠ b := by simp [a, b, Fin.ext_iff]
+    -- Extract term at index a
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ a)]
+    -- Extract term at index b
+    have hb_mem : b ∈ Finset.univ.erase a := by
+      simp [Finset.mem_erase, hab.symm]
+    rw [← Finset.add_sum_erase _ _ hb_mem]
+    -- Simplify terms at a and b
+    have ha_if : (if a.val = 2 * i.val then (1 : F)
+         else if a.val = 2 * i.val + 1 then 1
+         else if False ∧ a.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if False ∧ a.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = 1 := by simp [a]
+    have hb_if : (if b.val = 2 * i.val then (1 : F)
+         else if b.val = 2 * i.val + 1 then 1
+         else if False ∧ b.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if False ∧ b.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) = 1 := by simp [b]
+    rw [ha_if, one_mul, hb_if, one_mul]
+    -- The remaining sum is zero
+    have hrest : ∑ x ∈ (Finset.univ.erase a).erase b,
+        (if x.val = 2 * i.val then (1 : F)
+         else if x.val = 2 * i.val + 1 then 1
+         else if False ∧ x.val = 2 * (i.val - 1) then
+           -(1 - challenges ⟨i.val - 1, by omega⟩)
+         else if False ∧ x.val = 2 * (i.val - 1) + 1 then
+           -(challenges ⟨i.val - 1, by omega⟩)
+         else 0) * w x = 0 := by
+      apply Finset.sum_eq_zero
+      intros j hj
+      have hj_ne_b : j ≠ b := Finset.ne_of_mem_erase hj
+      have hj_ne_a : j ≠ a := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hj)
+      have hja' : j.val ≠ 2 * i.val := by intro h; exact hj_ne_a (Fin.ext h)
+      have hjb' : j.val ≠ 2 * i.val + 1 := by intro h; exact hj_ne_b (Fin.ext h)
+      simp [hja', hjb']
+    rw [hrest, add_zero]
 
 /-- Helper: the sparse sum for generateFinalConstraint reduces to the
     nonzero terms. -/
@@ -124,7 +264,54 @@ theorem sparse_final_sum_eq {n : ℕ} (hn : 0 < n)
         w ⟨2 * (n - 1), by unfold witnessSize; omega⟩ +
       challenges ⟨n - 1, by omega⟩ *
         w ⟨2 * (n - 1) + 1, by unfold witnessSize; omega⟩ := by
-  sorry
+  -- Rewrite each matrix entry using the definition
+  conv_lhs =>
+    arg 2; ext j
+    simp only [generateFinalConstraint, hn, ↓reduceDIte]
+  -- Now the sum has the form ∑ j, (if j.val = 2*(n-1) then ... else if ... then ... else 0) * w j
+  -- We use Finset.sum_congr + splitting
+  -- First, let's define the two key indices
+  set a : Fin (witnessSize n) := ⟨2 * (n - 1), by unfold witnessSize; omega⟩
+  set b : Fin (witnessSize n) := ⟨2 * (n - 1) + 1, by unfold witnessSize; omega⟩
+  have hab : a ≠ b := by simp [a, b, Fin.ext_iff]
+  -- Show that for j ≠ a and j ≠ b, the term is 0
+  have hzero : ∀ j : Fin (witnessSize n), j ≠ a → j ≠ b →
+      (if j.val = 2 * (n - 1) then (1 - challenges ⟨n - 1, by omega⟩)
+       else if j.val = 2 * (n - 1) + 1 then challenges ⟨n - 1, by omega⟩
+       else 0) * w j = 0 := by
+    intros j hja hjb
+    have hja' : j.val ≠ 2 * (n - 1) := by intro h; exact hja (Fin.ext h)
+    have hjb' : j.val ≠ 2 * (n - 1) + 1 := by intro h; exact hjb (Fin.ext h)
+    simp [hja', hjb']
+  -- Extract term at index a
+  rw [← Finset.add_sum_erase _ _ (Finset.mem_univ a)]
+  -- Extract term at index b from the remaining sum
+  have hb_mem : b ∈ Finset.univ.erase a := by
+    simp [Finset.mem_erase, hab.symm]
+  rw [← Finset.add_sum_erase _ _ hb_mem]
+  -- The remaining sum is zero
+  have hrest : ∑ x ∈ (Finset.univ.erase a).erase b,
+      (if x.val = 2 * (n - 1) then (1 - challenges ⟨n - 1, by omega⟩)
+       else if x.val = 2 * (n - 1) + 1 then challenges ⟨n - 1, by omega⟩
+       else 0) * w x = 0 := by
+    apply Finset.sum_eq_zero
+    intros j hj
+    have hj_ne_b : j ≠ b := Finset.ne_of_mem_erase hj
+    have hj_ne_a : j ≠ a := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hj)
+    exact hzero j hj_ne_a hj_ne_b
+  rw [hrest, add_zero]
+  -- Now simplify the two terms at a and b
+  -- At a: j.val = 2*(n-1), so first if is true
+  -- At b: j.val = 2*(n-1)+1, first if is false, second if is true
+  have ha_if : (if a.val = 2 * (n - 1) then (1 - challenges ⟨n - 1, by omega⟩)
+       else if a.val = 2 * (n - 1) + 1 then challenges ⟨n - 1, by omega⟩
+       else 0) = (1 - challenges ⟨n - 1, by omega⟩) := by
+    simp [a]
+  have hb_if : (if b.val = 2 * (n - 1) then (1 - challenges ⟨n - 1, by omega⟩)
+       else if b.val = 2 * (n - 1) + 1 then challenges ⟨n - 1, by omega⟩
+       else 0) = challenges ⟨n - 1, by omega⟩ := by
+    simp [b]
+  rw [ha_if, hb_if]
 
 /-- If the encoded witness satisfies the sum-check constraints AND the final
     constraint, then verifierAccepts holds. -/
