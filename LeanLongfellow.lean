@@ -20,9 +20,11 @@ import LeanLongfellow.Ligero.Tableau
 import LeanLongfellow.Ligero.Tests.Linear
 import LeanLongfellow.Ligero.Tests.LowDegree
 import LeanLongfellow.Ligero.Tests.Quadratic
+import LeanLongfellow.Ligero.Soundness
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
 import LeanLongfellow.Circuit.Reduction
 import LeanLongfellow.Circuit.Composition
 import LeanLongfellow.Circuit.Gates
+import LeanLongfellow.Circuit.Examples
