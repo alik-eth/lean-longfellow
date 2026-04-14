@@ -65,6 +65,12 @@ noncomputable def generateFinalConstraint {n : ℕ}
     else 0
   target _ := p.eval challenges
 
+/-- Generate quadratic constraints from the witness encoding.
+    Currently returns no constraints since the witness has no product structure.
+    When padding is added, this will encode pad_left · pad_right = pad_product. -/
+def generateQuadConstraints {n : ℕ} : Fin 0 → QuadConstraint (witnessSize n) :=
+  Fin.elim0
+
 /-- For a degree-≤-1 polynomial: p(r) = (1-r)·p(0) + r·p(1). -/
 theorem eval_deg_le_one (p : F[X]) (hdeg : p.natDegree ≤ 1) (r : F) :
     p.eval r = (1 - r) * p.eval 0 + r * p.eval 1 := by
