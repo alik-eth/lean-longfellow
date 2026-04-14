@@ -7,6 +7,7 @@ import LeanLongfellow.Sumcheck.Completeness
 import LeanLongfellow.Sumcheck.Soundness
 import LeanLongfellow.Sumcheck.Pad
 import LeanLongfellow.Field.Basic
+import LeanLongfellow.Field.P256
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Transform
 import LeanLongfellow.FiatShamir.Soundness
@@ -22,6 +23,7 @@ import LeanLongfellow.Ligero.Tests.LowDegree
 import LeanLongfellow.Ligero.Tests.Quadratic
 import LeanLongfellow.Ligero.Soundness
 import LeanLongfellow.Ligero.Concrete
+import LeanLongfellow.Ligero.FiatShamir
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
@@ -33,6 +35,7 @@ import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECArith
 import LeanLongfellow.Circuit.ECDSA
+import LeanLongfellow.Circuit.ECDSACircuit
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
