@@ -13,3 +13,7 @@ import LeanLongfellow.Ligero.Constraints
 import LeanLongfellow.Ligero.Interface
 import LeanLongfellow.Ligero.Generate
 import LeanLongfellow.Ligero.Longfellow
+import LeanLongfellow.Circuit.Defs
+import LeanLongfellow.Circuit.EqPoly
+import LeanLongfellow.Circuit.Combining
+import LeanLongfellow.Circuit.Reduction
