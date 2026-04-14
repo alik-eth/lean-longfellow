@@ -9,3 +9,4 @@ import LeanLongfellow.Field.Basic
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Transform
 import LeanLongfellow.FiatShamir.Soundness
+import LeanLongfellow.Ligero.Generate
