@@ -169,17 +169,7 @@ theorem combiningPoly_sum (layer : CircuitLayer F s)
 
 **Proof:** Swap sums (∑_{lr} ∑_g → ∑_g ∑_{lr}), apply `eqPoly_select` to collapse the g sum, then the inner sum matches `layerConsistent`.
 
-```lean
-/-- The combining polynomial's sumFirstVar has degree ≤ 2.
-    This is because each variable appears at most quadratically:
-    once from add/mul (multilinear) and once from V (multilinear),
-    giving degree 1+1=2 in the mul·V·V term. -/
-theorem combiningPolyMLE_sumFirstVar_degree (layer : CircuitLayer F s)
-    (t : Fin s → F) (V_next : LayerValues F s) :
-    (combiningPolyMLE layer t V_next).sumFirstVar.natDegree ≤ 2
-```
-
-**Note:** This theorem may require `sorry` — the degree bound is structurally clear but formalizing it requires reasoning about how `sumFirstVar` interacts with products of multilinear extensions. The degree-2 property propagates through each round of the sumcheck (each partial evaluation preserves the degree bound), which is a general property of multilinear polynomials.
+**Note on degree-2:** The combining polynomial Q has degree 2 per variable (from the `mul·V·V` term), but `combiningPolyMLE` is a `MultilinearPoly` (degree 1 per variable by construction). These agree on `{0,1}^{2s}` but differ elsewhere. This is fine for soundness: the adversary's round polynomials may have degree ≤ 2 (hypothesis `hdeg`), while the honest MLE prover has degree ≤ 1. The diff has degree ≤ max(2,1) = 2, and `sumcheck_soundness_det` with `d = 2` gives the root hit. No degree-2 honest prover construction is needed for the soundness proof.
 
 ## Component 4: Single-Layer Reduction (Reduction.lean)
 
@@ -263,11 +253,11 @@ def combineClaims (a b alpha : F) : F :=
 
 ## Expected Sorry's
 
-1. **`combiningPolyMLE_sumFirstVar_degree`** — Degree-2 bound on the combining polynomial's sumFirstVar. Structurally clear but requires reasoning about products of multilinear extensions.
+1. **Possible:** `concat3` / `concat3F` interaction lemmas — showing that `concat3 (boolToField g) (boolToField l) (boolToField r) = boolToField (concat3 g l r)` and similar. Tedious index arithmetic, may need sorry if Lean's `omega`/`simp` can't close the goals.
 
-2. **Possible:** `concat3` / `concat3F` interaction lemmas — showing that `concat3 (boolToField g) (boolToField l) (boolToField r) = boolToField (concat3 g l r)` and similar. Tedious index arithmetic.
+2. **Possible:** `combiningPoly_sum` — the proof requires swapping sums and matching the `layerConsistent` definition through `concat3`. The math is straightforward but the Lean bookkeeping may be nontrivial.
 
-**Sorry-free targets:** `eqPoly_bool`, `eqPoly_sum`, `eqPoly_select`, `combiningPoly_sum`, `layer_reduction_soundness`.
+**Sorry-free targets:** `eqPoly_bool`, `eqPoly_sum`, `eqPoly_select`, `layer_reduction_soundness` (direct application of `sumcheck_soundness_det`).
 
 ## Non-Goals
 
