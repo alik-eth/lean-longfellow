@@ -2,192 +2,116 @@ import LeanLongfellow.Sumcheck.Protocol
 
 open Finset Polynomial MultilinearPoly
 
-variable {F : Type*} [Field F] {n : ℕ}
+variable {F : Type*} [Field F]
 
 /-! # Sumcheck Completeness
 
 If the claimed sum is correct and the prover is honest,
-the verifier always accepts. The mathematical content is straightforward:
-at each round, `sumFirstVar` correctly sums the partially evaluated polynomial.
-The main difficulty is dependent-type wrangling with `iterPartialEval`.
-
-Two lemmas use `sorry` for dependent-type cast alignment:
-- `iterPartialEval_step_aux` inductive step: the telescoping step connecting
-  table sums across iterated partial evaluations (follows from `partialEval_table_sum`).
-- `iterPartialEval_final`: the final evaluation check (follows from
-  iterating `partialEvalFirst_eval`).
-
-Both are mathematically straightforward but blocked by Lean's `Eq.mpr` casts
-in `iterPartialEval`'s recursion pattern.
+the verifier always accepts. The proof proceeds by induction on `n`,
+using the clean recursive definition of `honestProver`.
 -/
-
--- Helper: cast-aware sumFirstVar_sum
-private theorem cast_sumFirstVar_sum (d d' : ℕ) (hd : d = d' + 1)
-    (q : MultilinearPoly F d) :
-    (hd ▸ q).sumFirstVar.eval 0 + (hd ▸ q).sumFirstVar.eval 1 =
-      ∑ b : Fin d → Bool, q.table b := by
-  subst hd; exact sumFirstVar_sum q
-
--- Helper: cast-aware partialEval_table_sum
-private theorem cast_partialEval_table_sum (d d' : ℕ) (hd : d = d' + 1)
-    (q : MultilinearPoly F d) (r : F) :
-    ∑ b : Fin d' → Bool, ((hd ▸ q).partialEvalFirst r).table b =
-      (hd ▸ q).sumFirstVar.eval r := by
-  subst hd; exact partialEval_table_sum q r
-
-/-- The honest prover's round-i polynomial evaluations at 0 and 1 sum to
-    the table sum of the i-th iterated partial evaluation. -/
-private theorem honestProver_eval_sum (p : MultilinearPoly F n)
-    (challenges : Fin n → F) (i : Fin n) :
-    (honestProver p challenges i).prover_poly.eval 0 +
-    (honestProver p challenges i).prover_poly.eval 1 =
-    ∑ b : Fin (n - i.val) → Bool,
-      (iterPartialEval F n p i.val (le_of_lt i.isLt)
-        (fun j => challenges ⟨j.val, by omega⟩)).table b := by
-  simp only [honestProver]
-  exact cast_sumFirstVar_sum (n - i.val) (n - i.val - 1) (by omega) _
-
-/-- The honest prover's round-i polynomial evaluated at the challenge
-    equals `sumFirstVar` of the iterated partial evaluation, evaluated at challenge i. -/
-private theorem honestProver_eval_challenge (p : MultilinearPoly F n)
-    (challenges : Fin n → F) (i : Fin n) :
-    (honestProver p challenges i).prover_poly.eval
-      (honestProver p challenges i).challenge =
-    ((by omega : n - i.val = (n - i.val - 1) + 1) ▸
-      iterPartialEval F n p i.val (le_of_lt i.isLt)
-        (fun j => challenges ⟨j.val, by omega⟩)).sumFirstVar.eval (challenges i) := by
-  simp [honestProver]
-
-/-- The key telescoping property: table sum after `k+1` partial evaluations
-    equals `sumFirstVar` of the `k`-step result, evaluated at challenge `k`.
-
-    Mathematically follows from `partialEval_table_sum`. The base cases (k=0 for
-    any m, and any k for m=0) are proved; the inductive step (succ m', succ k)
-    requires aligning `Eq.mpr` casts from `iterPartialEval`'s recursion.
-
-    The sorry in the inductive step is purely about cast alignment:
-    after unfolding `iterPartialEval` one step on both sides, both reduce to
-    the IH `ih_m` applied to `p.partialEvalFirst (cf 0)`. -/
-private theorem iterPartialEval_step_aux :
-    ∀ (m : ℕ) (p : MultilinearPoly F (m + 1)) (k : ℕ) (hk : k + 1 ≤ m + 1)
-      (cf : Fin (k + 1) → F),
-    ∑ b : Fin (m + 1 - (k + 1)) → Bool,
-      (iterPartialEval F (m + 1) p (k + 1) hk cf).table b =
-    ((by omega : m + 1 - k = (m + 1 - k - 1) + 1) ▸
-      iterPartialEval F (m + 1) p k (by omega)
-        (fun j => cf ⟨j.val, by omega⟩)).sumFirstVar.eval
-          (cf ⟨k, by omega⟩) := by
-  intro m p
-  induction m with
-  | zero =>
-    intro k hk cf
-    have : k = 0 := by omega
-    subst this
-    simp only [iterPartialEval]
-    exact cast_partialEval_table_sum _ _ (by omega) p (cf ⟨0, by omega⟩)
-  | succ m' ih_m =>
-    intro k
-    induction k with
-    | zero =>
-      intro hk cf
-      simp only [iterPartialEval]
-      exact cast_partialEval_table_sum _ _ (by omega) p (cf ⟨0, by omega⟩)
-    | succ k _ih_k =>
-      intro hk cf
-      set q := p.partialEvalFirst (cf ⟨0, by omega⟩)
-      set cf' : Fin (k + 1) → F := fun j => cf ⟨j.val + 1, by omega⟩
-      -- ih_m applied to q gives exactly what we need, modulo casts:
-      -- ∑ b, (iterPartialEval F (m'+1) q (k+1) ...).table b =
-      --   (cast ▸ iterPartialEval F (m'+1) q k ...).sumFirstVar.eval (cf' k)
-      -- The goal, after unfolding iterPartialEval once on both sides,
-      -- becomes ih_m q k (by omega) cf', but with different Nat cast proofs.
-      -- This cast alignment is sorry'd.
-      have _ih_applied := ih_m q k (by omega) cf'
-      sorry
-
-private theorem iterPartialEval_step (p : MultilinearPoly F n)
-    (k : ℕ) (hk : k + 1 ≤ n)
-    (challenges : Fin n → F) :
-    ∑ b : Fin (n - (k + 1)) → Bool,
-      (iterPartialEval F n p (k + 1) hk
-        (fun j => challenges ⟨j.val, by omega⟩)).table b =
-    ((by omega : n - k = (n - k - 1) + 1) ▸
-      iterPartialEval F n p k (by omega : k ≤ n)
-        (fun j => challenges ⟨j.val, by omega⟩)).sumFirstVar.eval
-          (challenges ⟨k, by omega⟩) := by
-  obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-  exact iterPartialEval_step_aux m p k hk (fun j => challenges ⟨j.val, by omega⟩)
-
-/-- Final evaluation: after `n-1` partial evaluations, `sumFirstVar` evaluated at
-    the last challenge equals `p.eval challenges`.
-
-    Mathematically follows from iterating `partialEvalFirst_eval`, but the
-    dependent-type casts in `iterPartialEval` make the formal proof delicate. -/
-private theorem iterPartialEval_final (p : MultilinearPoly F n)
-    (hn : 0 < n) (challenges : Fin n → F) :
-    ((by omega : n - (n - 1) = (n - (n - 1) - 1) + 1) ▸
-      iterPartialEval F n p (n - 1) (by omega)
-        (fun j => challenges ⟨j.val, by omega⟩)).sumFirstVar.eval
-          (challenges ⟨n - 1, by omega⟩) =
-    p.eval (fun i => challenges i) := by
-  sorry
-
-/-- The sum-check condition at round `i` when `i > 0`:
-    the table sum after `i` steps equals the previous round's polynomial
-    evaluated at the previous challenge. -/
-private theorem sumcheck_round_pos (p : MultilinearPoly F n)
-    (challenges : Fin n → F) (i : Fin n) (hi : i.val ≠ 0) :
-    ∑ b : Fin (n - i.val) → Bool,
-      (iterPartialEval F n p i.val (le_of_lt i.isLt)
-        (fun j => challenges ⟨j.val, by omega⟩)).table b =
-    (honestProver p challenges ⟨i.val - 1, by omega⟩).prover_poly.eval
-      (honestProver p challenges ⟨i.val - 1, by omega⟩).challenge := by
-  rw [honestProver_eval_challenge]
-  set k := i.val - 1 with hk_def
-  have hik : i.val = k + 1 := by omega
-  suffices h : ∀ (m : ℕ) (hm : m = k + 1) (hle : m ≤ n),
-      ∑ b : Fin (n - m) → Bool,
-        (iterPartialEval F n p m hle
-          (fun j => challenges ⟨j.val, by omega⟩)).table b =
-      ((by omega : n - k = (n - k - 1) + 1) ▸
-        iterPartialEval F n p k (by omega)
-          (fun j => challenges ⟨j.val, by omega⟩)).sumFirstVar.eval
-            (challenges ⟨k, by omega⟩) by
-    convert h i.val hik (le_of_lt i.isLt)
-  intro m hm hle
-  subst hm
-  exact iterPartialEval_step p k (by omega) challenges
 
 /-- **Sumcheck completeness:** if the claimed sum is correct and the prover is honest,
     the verifier always accepts. Error probability = 0. -/
-theorem sumcheck_completeness (p : MultilinearPoly F n)
+theorem sumcheck_completeness {n : ℕ} (p : MultilinearPoly F n)
     (challenges : Fin n → F) :
     verifierAccepts p (∑ b : Fin n → Bool, p.table b) (honestProver p challenges) := by
-  unfold verifierAccepts
-  refine ⟨?_, ?_⟩
-  · -- Sum-check condition: for each round i, eval at 0 + eval at 1 = previous value
-    intro i
-    rw [honestProver_eval_sum]
-    split
-    · -- i.val = 0: table sum = claimed sum = ∑ p.table
-      rename_i hi
-      have h0 : i.val = 0 := hi
-      have : ∀ (hle : i.val ≤ n) (cf : Fin i.val → F),
-          ∑ b : Fin (n - i.val) → Bool,
-            (iterPartialEval F n p i.val hle cf).table b =
-          ∑ b : Fin n → Bool, p.table b := by
-        rw [h0]
-        intro hle cf
-        simp [iterPartialEval]
-      exact this _ _
-    · -- i.val > 0: telescoping step
-      rename_i hi
-      exact sumcheck_round_pos p challenges i hi
-  · -- Final evaluation check
-    intro hn
-    show (honestProver p challenges ⟨n - 1, by omega⟩).prover_poly.eval
-        (honestProver p challenges ⟨n - 1, by omega⟩).challenge =
-      p.eval (fun i => (honestProver p challenges i).challenge)
-    rw [honestProver_eval_challenge]
-    simp only [honestProver]
-    exact iterPartialEval_final p hn challenges
+  induction n with
+  | zero =>
+    exact ⟨fun i => Fin.elim0 i, fun hn => absurd hn (by omega)⟩
+  | succ m ih =>
+    -- Reduced polynomial after fixing first variable
+    have ih_inst := ih (p.partialEvalFirst (challenges 0)) (fun j => challenges j.succ)
+    obtain ⟨ih_sum, ih_final⟩ := ih_inst
+    refine ⟨fun i => ?_, fun hm => ?_⟩
+    · -- Sum-check: for each round i
+      refine Fin.cases ?_ (fun j => ?_) i
+      · -- i = 0
+        simp only [honestProver_zero]
+        exact sumFirstVar_sum p
+      · -- i = j.succ > 0
+        simp only [honestProver_succ, show (j.succ : ℕ) ≠ 0 from Nat.succ_ne_zero _, ↓reduceIte]
+        -- Previous round index: ⟨j.succ.val - 1, _⟩ = j.castSucc
+        have hprev : (⟨(j.succ : ℕ) - 1, by omega⟩ : Fin (m + 1)) = j.castSucc := by
+          ext; simp [Fin.val_castSucc]
+        rw [hprev]
+        -- Use IH sum-check for j
+        have ih_j := ih_sum j
+        -- IH says: (hp reduced tail j).eval 0 + .eval 1 =
+        --   if j.val = 0 then ∑ reduced.table else (hp reduced tail ⟨j-1,_⟩).eval (challenge)
+        -- Our goal: same LHS = (hp p chall j.castSucc).prover_poly.eval (... .challenge)
+        -- We need to show RHS_ours = RHS_ih
+        rw [ih_j]
+        split
+        · -- j.val = 0
+          rename_i hj0
+          have : j.castSucc = (0 : Fin (m + 1)) := by ext; simp [Fin.val_castSucc, hj0]
+          rw [this, honestProver_zero]
+          show ∑ b, (p.partialEvalFirst (challenges 0)).table b =
+            (sumFirstVar p).eval (challenges 0)
+          exact partialEval_table_sum p (challenges 0)
+        · -- j.val > 0
+          rename_i hj_ne
+          -- RHS of IH: (hp reduced tail ⟨j.val-1, _⟩).prover_poly.eval (... .challenge)
+          -- Our RHS: (hp p chall j.castSucc).prover_poly.eval (... .challenge)
+          -- j.castSucc.val = j.val, which > 0, so j.castSucc = ⟨j.val-1, _⟩.succ
+          have hcast_succ : j.castSucc =
+              (⟨j.val - 1, by omega⟩ : Fin m).succ := by
+            ext; simp [Fin.val_castSucc]; omega
+          rw [hcast_succ, honestProver_succ]
+    · -- Final evaluation check
+      -- Goal has `let last := ⟨m, _⟩`; show it explicitly
+      show (honestProver p challenges ⟨m, by omega⟩).prover_poly.eval
+             (honestProver p challenges ⟨m, by omega⟩).challenge =
+           p.eval (fun i => (honestProver p challenges i).challenge)
+      -- Express ⟨m, _⟩ as Fin.succ or 0
+      cases m with
+      | zero =>
+        -- n = 1
+        change (honestProver p challenges (0 : Fin 1)).prover_poly.eval
+                 (honestProver p challenges (0 : Fin 1)).challenge =
+               p.eval (fun i => (honestProver p challenges i).challenge)
+        rw [honestProver_zero]
+        simp only
+        -- challenges for 1-var poly
+        have : (fun i : Fin 1 => (honestProver p challenges i).challenge) =
+            Fin.cons (challenges 0) Fin.elim0 := by
+          funext i; fin_cases i; simp [Fin.cons_zero, honestProver_zero]
+        rw [this]
+        -- sumFirstVar(p).eval (challenges 0) = p.eval (Fin.cons (challenges 0) Fin.elim0)
+        rw [show (sumFirstVar p).eval (challenges 0) =
+            ∑ b : Fin 0 → Bool, (partialEvalFirst p (challenges 0)).table b from
+          (partialEval_table_sum p (challenges 0)).symm]
+        -- 0-var poly: ∑ table = eval at any point
+        have h0eval : ∀ (q : MultilinearPoly F 0) (x : Fin 0 → F),
+            ∑ b : Fin 0 → Bool, q.table b = q.eval x := by
+          intro q x
+          have hsub : ∀ (b : Fin 0 → Bool), b = Fin.elim0 :=
+            fun b => funext (fun i => Fin.elim0 i)
+          simp only [MultilinearPoly.eval, lagrangeBasis]
+          rw [Fintype.sum_eq_single Fin.elim0 (fun b hb => absurd (hsub b) hb),
+              Fintype.sum_eq_single Fin.elim0 (fun b hb => absurd (hsub b) hb)]
+          simp [Finset.prod_empty]
+        rw [h0eval, partialEvalFirst_eval]
+      | succ m' =>
+        -- n = m' + 2, ⟨m'+1, _⟩ = ⟨m', _⟩.succ
+        have hsuc : (⟨m' + 1, by omega⟩ : Fin (m' + 2)) =
+            (⟨m', by omega⟩ : Fin (m' + 1)).succ := by
+          ext; simp
+        rw [hsuc, honestProver_succ]
+        -- IH final check: need to handle the `let` in ih_final
+        have ih_fin := ih_final (by omega : 0 < m' + 1)
+        -- ih_fin has form: let last := ⟨m', _⟩; ... = reduced.eval ...
+        -- After simp only, the let should be inlined
+        change _ at ih_fin
+        -- The last index in ih_final: ⟨m'+1-1, _⟩ = ⟨m', _⟩
+        trans (p.partialEvalFirst (challenges 0)).eval
+            (fun i => (honestProver (p.partialEvalFirst (challenges 0))
+              (fun k => challenges k.succ) i).challenge)
+        · exact ih_fin
+        · rw [partialEvalFirst_eval]
+          congr 1
+          funext i
+          refine Fin.cases ?_ (fun j => ?_) i
+          · simp [Fin.cons_zero, honestProver_zero]
+          · simp [Fin.cons_succ, honestProver_succ]
