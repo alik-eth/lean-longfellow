@@ -34,6 +34,7 @@ import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
+import LeanLongfellow.Circuit.SHA256
 import LeanLongfellow.Predicate.Defs
 import LeanLongfellow.Predicate.Correctness
 import LeanLongfellow.Escrow.Defs
