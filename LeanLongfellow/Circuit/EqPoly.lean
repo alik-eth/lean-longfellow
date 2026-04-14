@@ -47,3 +47,21 @@ theorem eqPoly_sum (t : Fin n → Bool) :
     ∑ b : Fin n → Bool, eqPoly (F := F) (boolToField t) (boolToField b) = 1 := by
   have := eqPoly_select t (fun _ => (1 : F))
   simpa using this
+
+/-- eqPoly with a general first argument and Boolean second argument equals lagrangeBasis.
+    `eqPoly t (boolToField g) = lagrangeBasis g t` -/
+theorem eqPoly_comm_boolToField (t : Fin n → F) (g : Fin n → Bool) :
+    eqPoly t (boolToField g) = lagrangeBasis g t := by
+  simp only [eqPoly, lagrangeBasis, boolToField]
+  apply Finset.prod_congr rfl
+  intro i _
+  cases g i <;> simp [mul_comm]
+
+/-- Summing `eqPoly(t, boolToField g) * f(g)` over the Boolean hypercube
+    computes the MLE evaluation. Works for any `t ∈ F^n`. -/
+theorem eqPoly_eval (t : Fin n → F) (p : MultilinearPoly F n) :
+    ∑ g : Fin n → Bool, eqPoly t (boolToField g) * p.table g = p.eval t := by
+  simp only [eqPoly_comm_boolToField, eval]
+  apply Finset.sum_congr rfl
+  intro g _
+  ring
