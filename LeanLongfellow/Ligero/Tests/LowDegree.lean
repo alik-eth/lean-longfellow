@@ -236,19 +236,40 @@ theorem lowDegreeTest_rejects_if_disagree_opened {params : LigeroParams}
 /-- **Soundness (multi-position detection)**: If the combined row is NOT a
     codeword, then for any codeword `cw`, a `t`-tuple of positions that ALL
     agree with `cw` must come from the agreement set, which has fewer than
-    `NCOL` elements.  The number of such "bad" tuples is strictly less than
-    `NCOL ^ t` total tuples. -/
+    `NCOL` elements.  The number of such "bad" tuples is at most
+    `agree.card ^ t`, which is strictly less than `NCOL ^ t` when `t > 0`. -/
 theorem lowDegreeTest_multi_detection {params : LigeroParams} [DecidableEq F]
     (domain : EvalDomain F params.NCOL) (T : Tableau F params)
     (u : Fin params.NROW → F)
     (h_not_cw : ¬ combinedRowIsCodeword domain T u)
     (cw : Fin params.NCOL → F)
     (h_cw : isRSCodeword domain params.BLOCK cw)
-    (t : ℕ) :
+    (t : ℕ) (ht : 0 < t) :
     (Finset.univ.filter (fun pos : Fin t → Fin params.NCOL =>
       ∀ j : Fin t, combinedRow T u (pos j) = cw (pos j))).card <
     params.NCOL ^ t := by
-  -- The bad tuples are functions whose range lies in the agreement set.
-  -- The agreement set has < NCOL elements.
-  -- So the number of bad tuples < NCOL ^ t.
-  sorry
+  -- Let A = agreement set = {i | combinedRow T u i = cw i}
+  set A := Finset.univ.filter (fun i : Fin params.NCOL =>
+    combinedRow T u i = cw i) with hA_def
+  have hA_lt : A.card < params.NCOL :=
+    combined_not_codeword_agree_lt domain T u h_not_cw cw h_cw
+  -- The bad tuples are exactly functions Fin t → A (lifted to Fin t → Fin NCOL)
+  -- Step 1: The filter set is contained in the set of functions with range ⊆ A
+  have h_sub : Finset.univ.filter (fun pos : Fin t → Fin params.NCOL =>
+      ∀ j : Fin t, combinedRow T u (pos j) = cw (pos j)) ⊆
+      Fintype.piFinset (fun _ : Fin t => A) := by
+    intro pos hpos
+    rw [Finset.mem_filter] at hpos
+    rw [Fintype.mem_piFinset]
+    intro j
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_univ _, hpos.2 j⟩
+  -- Step 2: card of piFinset = A.card ^ t
+  have h_pi_card : (Fintype.piFinset (fun _ : Fin t => A)).card = A.card ^ t := by
+    rw [Fintype.card_piFinset]
+    simp [Finset.prod_const]
+  -- Step 3: chain the inequalities
+  calc (Finset.univ.filter _).card
+      ≤ (Fintype.piFinset (fun _ : Fin t => A)).card := Finset.card_le_card h_sub
+    _ = A.card ^ t := h_pi_card
+    _ < params.NCOL ^ t := Nat.pow_lt_pow_left hA_lt (by omega)

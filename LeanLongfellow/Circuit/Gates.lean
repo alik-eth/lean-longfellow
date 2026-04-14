@@ -140,4 +140,135 @@ theorem gatesToLayer_consistent {s : ℕ} {F : Type*} [Field F]
       V_curr.table g = 0)
     (g : Fin s → Bool) :
     layerConsistent (gatesToLayer F gates) V_curr V_next g := by
-  sorry
+  simp only [layerConsistent, gatesToLayer, splitG_concat3, splitLG_concat3, splitRG_concat3]
+  -- Helper: uniqueness of gates with output = g
+  have gate_unique : ∀ g₁ g₂ : Gate s, g₁ ∈ gates → g₂ ∈ gates →
+      g₁.output = g → g₂.output = g → g₁ = g₂ := by
+    intro g₁ g₂ hg₁ hg₂ ho₁ ho₂
+    have hg₁f : g₁ ∈ gates.filter (fun gate => decide (gate.output = g)) := by
+      simp [List.mem_filter, hg₁, ho₁]
+    have hg₂f : g₂ ∈ gates.filter (fun gate => decide (gate.output = g)) := by
+      simp [List.mem_filter, hg₂, ho₂]
+    have hlen : (gates.filter (fun gate => decide (gate.output = g))).length = 1 := by
+      have := huniq g
+      have := List.length_pos_of_mem hg₁f
+      omega
+    obtain ⟨x, t, hxt⟩ := (gates.filter (fun gate => decide (gate.output = g))).exists_of_length_succ
+      (n := 0) hlen
+    rw [hxt] at hlen
+    simp at hlen
+    rw [hxt, hlen] at hg₁f hg₂f
+    simp at hg₁f hg₂f
+    rw [hg₁f, hg₂f]
+  -- Helper: if no gate has output=g, then no gate matches (g,l,r) for any type
+  have no_match_of_no_output : ∀ (ty : GateType) (l r : Fin s → Bool),
+      ¬ (gates.any (fun gate => decide (gate.output = g)) = true) →
+      (gates.any (fun gate => gate.matches ty g l r)) = false := by
+    intro ty l r hno
+    rw [List.any_eq_false]
+    intro gate hgate_mem
+    rw [Gate.matches_iff]
+    intro ⟨_, hout, _, _⟩
+    apply hno
+    rw [List.any_eq_true]
+    exact ⟨gate, hgate_mem, by simp [hout]⟩
+  -- Helper: any gate matching at (g, l, r) must be the unique gate with output g
+  have no_match_wrong_lr : ∀ (ty : GateType) (l r : Fin s → Bool) (gate0 : Gate s),
+      gate0 ∈ gates → gate0.output = g →
+      (l ≠ gate0.left ∨ r ≠ gate0.right) →
+      (gates.any (fun gate' => gate'.matches ty g l r)) = false := by
+    intro ty l r gate0 hmem0 hout0 hlr_ne
+    rw [List.any_eq_false]
+    intro gate' hgate'_mem
+    rw [Gate.matches_iff]
+    intro ⟨_, hout', hleft', hright'⟩
+    have := gate_unique gate' gate0 hgate'_mem hmem0 hout' hout0
+    subst this
+    rcases hlr_ne with hl | hr
+    · exact hl hleft'.symm
+    · exact hr hright'.symm
+  -- Case split: is g covered by some gate?
+  by_cases hany : gates.any (fun gate => decide (gate.output = g)) = true
+  · -- Case 1: g is covered by at least one gate
+    rw [List.any_eq_true] at hany
+    obtain ⟨gate, hgate_mem, hgate_out⟩ := hany
+    simp only [decide_eq_true_eq] at hgate_out
+    -- Build the lr pair for this gate
+    let lr₀ : Fin (2 * s) → Bool := fun k =>
+      if h : k.val < s then gate.left ⟨k.val, h⟩
+      else gate.right ⟨k.val - s, by omega⟩
+    have hlr₀L : splitL lr₀ = gate.left := by
+      funext j; simp [splitL, lr₀, j.isLt]
+    have hlr₀R : splitR lr₀ = gate.right := by
+      funext j; simp [splitR, lr₀, show ¬(j.val + s < s) by omega]
+    -- Inverse: splitL/splitR determine lr
+    have lr_eq_of_splits : ∀ lr : Fin (2 * s) → Bool,
+        splitL lr = gate.left → splitR lr = gate.right → lr = lr₀ := by
+      intro lr hL hR
+      funext k
+      simp only [lr₀]
+      by_cases hk : k.val < s
+      · simp [hk]
+        have := congrFun hL ⟨k.val, hk⟩
+        simp [splitL] at this
+        exact this
+      · simp [hk]
+        have hk2 := k.isLt
+        have := congrFun hR ⟨k.val - s, by omega⟩
+        simp [splitR] at this
+        convert this using 2
+        apply Fin.ext; simp; omega
+    -- For lr ≠ lr₀, both match functions return false
+    have off_diag : ∀ lr ∈ Finset.univ, lr ≠ lr₀ →
+        (if (gates.any fun g' => g'.matches .add g (splitL lr) (splitR lr)) then (1 : F) else 0) *
+          (V_next.table (splitL lr) + V_next.table (splitR lr)) +
+        (if (gates.any fun g' => g'.matches .mul g (splitL lr) (splitR lr)) then (1 : F) else 0) *
+          (V_next.table (splitL lr) * V_next.table (splitR lr)) = 0 := by
+      intro lr _ hlr_ne
+      have hlr_diff : splitL lr ≠ gate.left ∨ splitR lr ≠ gate.right := by
+        by_contra h
+        push Not at h
+        exact hlr_ne (lr_eq_of_splits lr h.1 h.2)
+      have hadd := no_match_wrong_lr .add (splitL lr) (splitR lr) gate hgate_mem hgate_out hlr_diff
+      have hmul := no_match_wrong_lr .mul (splitL lr) (splitR lr) gate hgate_mem hgate_out hlr_diff
+      simp [hadd, hmul]
+    -- Use sum_eq_single to isolate the lr₀ term
+    rw [Finset.sum_eq_single lr₀ off_diag (by simp)]
+    -- Now the goal is about lr₀ specifically
+    rw [hlr₀L, hlr₀R]
+    -- Handle the gate type
+    have heval_gate := heval gate hgate_mem
+    rw [hgate_out] at heval_gate
+    -- Helper: no other gate type matches at (g, gate.left, gate.right)
+    have no_other_type : ∀ (ty : GateType), gate.gateType ≠ ty →
+        (gates.any (fun g' => g'.matches ty g gate.left gate.right)) = false := by
+      intro ty hne
+      rw [List.any_eq_false]
+      intro g' hg'_mem
+      rw [Gate.matches_iff]
+      intro ⟨hty', hout', _, _⟩
+      have := gate_unique g' gate hg'_mem hgate_mem hout' hgate_out
+      subst this; exact hne hty'
+    -- The gate itself matches
+    have self_match : ∀ (ty : GateType), gate.gateType = ty →
+        (gates.any (fun g' => g'.matches ty g gate.left gate.right)) = true := by
+      intro ty hty
+      rw [List.any_eq_true]
+      exact ⟨gate, hgate_mem, by rw [Gate.matches_iff]; exact ⟨hty, hgate_out, rfl, rfl⟩⟩
+    cases hty : gate.gateType
+    · -- add gate
+      rw [self_match .add hty, no_other_type .mul (by rw [hty]; decide)]
+      simp [hty] at heval_gate
+      simp [heval_gate]
+    · -- mul gate
+      rw [no_other_type .add (by rw [hty]; decide), self_match .mul hty]
+      simp [hty] at heval_gate
+      simp [heval_gate]
+  · -- Case 2: g is not covered - V_curr.table g = 0 and sum = 0
+    rw [hcovered g hany]
+    symm
+    apply Finset.sum_eq_zero
+    intro lr _
+    have hadd := no_match_of_no_output .add (splitL lr) (splitR lr) hany
+    have hmul := no_match_of_no_output .mul (splitL lr) (splitR lr) hany
+    simp [hadd, hmul]
