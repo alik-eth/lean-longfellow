@@ -38,6 +38,60 @@ theorem gkr_soundness_det (circuit : LayeredCircuit F k depth)
   exact layer_reduction_soundness circuit j_bad (gStars j_bad) (allRounds j_bad)
     hk h_layer (hdeg j_bad) h_inconsistent
 
+-- ───────────────────────────────────────────────────────
+-- Inter-layer gStar linkage
+-- ───────────────────────────────────────────────────────
+
+/-- Derive gStar for layer j+1 from layer j's sumcheck challenges.
+    After the sumcheck on the combining polynomial, the 2k random challenges
+    define a point (l*, r*) in F^(2k). We take the first k challenges as the
+    next layer's evaluation point (the "left" half l*). -/
+def deriveNextGStar (sumcheckChallenges : Fin (2 * k) → F) : Fin k → F :=
+  fun i => sumcheckChallenges ⟨i.val, by omega⟩
+
+/-- Full GKR verifier with inter-layer linkage.
+    `gStar_0` is the initial evaluation point (given externally).
+    For j ≥ 1, `gStar_j` is derived from layer (j-1)'s sumcheck challenges.
+
+    `layerChallenges` : per-layer sumcheck challenges
+    `h_challenges`    : round challenges match `layerChallenges` -/
+def gkrVerifierAcceptsLinked (circuit : LayeredCircuit F k depth)
+    (gStar_0 : Fin k → F)
+    (layerChallenges : Fin depth → Fin (2 * k) → F)
+    (allRounds : Fin depth → Fin (2 * k) → SumcheckRound F) : Prop :=
+  let gStars : Fin depth → Fin k → F := fun j =>
+    if hj : j.val = 0 then gStar_0
+    else deriveNextGStar (layerChallenges ⟨j.val - 1, by omega⟩)
+  ∀ j, layerVerifierAccepts circuit j (gStars j) (allRounds j)
+
+omit [Fintype F] in
+/-- Linked GKR soundness: with inter-layer linkage, if any layer is
+    inconsistent at its derived gStar, the per-layer sumcheck catches it.
+    That is, some challenge in that layer hit a root of a nonzero
+    degree-≤-1 polynomial. -/
+theorem gkr_linked_soundness_det (circuit : LayeredCircuit F k depth)
+    (gStar_0 : Fin k → F)
+    (layerChallenges : Fin depth → Fin (2 * k) → F)
+    (allRounds : Fin depth → Fin (2 * k) → SumcheckRound F)
+    (_h_challenges : ∀ j i, (allRounds j i).challenge = layerChallenges j i)
+    (hk : 0 < 2 * k)
+    (j_bad : Fin depth)
+    (h_inconsistent : ¬ layerConsistentAt circuit j_bad
+      (if _ : j_bad.val = 0 then gStar_0
+       else deriveNextGStar (layerChallenges ⟨j_bad.val - 1, by omega⟩)))
+    (haccept : gkrVerifierAcceptsLinked circuit gStar_0 layerChallenges allRounds)
+    (hdeg : ∀ j i, (allRounds j i).prover_poly.natDegree ≤ 1) :
+    ∃ i, ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
+      diff.eval (allRounds j_bad i).challenge = 0 := by
+  -- Extract the gStar for the bad layer from the linked definition
+  set gStar_bad := (if _ : j_bad.val = 0 then gStar_0
+    else deriveNextGStar (layerChallenges ⟨j_bad.val - 1, by omega⟩)) with hgStar_bad_def
+  -- The linked verifier accepted layer j_bad at gStar_bad
+  have h_layer : layerVerifierAccepts circuit j_bad gStar_bad (allRounds j_bad) :=
+    haccept j_bad
+  exact layer_reduction_soundness circuit j_bad gStar_bad (allRounds j_bad)
+    hk h_layer (hdeg j_bad) h_inconsistent
+
 omit [DecidableEq F] [Fintype F] in
 /-- The honest prover's polynomial at round `i` depends only on `cs j` for `j < i`. -/
 private theorem honestProver_poly_indep :

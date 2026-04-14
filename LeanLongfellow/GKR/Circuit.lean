@@ -7,34 +7,6 @@ open Finset MultilinearPoly
 variable {F : Type*} [Field F] {k depth : ℕ}
 
 -- ───────────────────────────────────────────────────────
--- Index helpers for splitting / joining (g, l, r) indices
--- ───────────────────────────────────────────────────────
-
-/-- Left projection of a vector indexed by `Fin (a + b)`. -/
-def splitLeft {α : Type*} {a b : ℕ} (x : Fin (a + b) → α) : Fin a → α :=
-  fun i => x (Fin.castAdd b i)
-
-/-- Right projection of a vector indexed by `Fin (a + b)`. -/
-def splitRight {α : Type*} {a b : ℕ} (x : Fin (a + b) → α) : Fin b → α :=
-  fun i => x (Fin.natAdd a i)
-
-/-- Concatenation of two vectors into `Fin (a + b) → α`. -/
-def vecConcat {α : Type*} {a b : ℕ} (x : Fin a → α) (y : Fin b → α) : Fin (a + b) → α :=
-  Fin.append x y
-
--- ───────────────────────────────────────────────────────
--- splitLeft / splitRight commute with boolToField
--- ───────────────────────────────────────────────────────
-
-theorem splitLeft_boolToField {a c : ℕ} (b : Fin (a + c) → Bool) :
-    splitLeft (boolToField (F := F) b) = boolToField (splitLeft b) := by
-  funext i; simp [splitLeft, boolToField]
-
-theorem splitRight_boolToField {a c : ℕ} (b : Fin (a + c) → Bool) :
-    splitRight (boolToField (F := F) b) = boolToField (splitRight b) := by
-  funext i; simp [splitRight, boolToField]
-
--- ───────────────────────────────────────────────────────
 -- Circuit types
 -- ───────────────────────────────────────────────────────
 
