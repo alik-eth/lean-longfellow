@@ -24,6 +24,7 @@ import LeanLongfellow.Ligero.Tests.Quadratic
 import LeanLongfellow.Ligero.Soundness
 import LeanLongfellow.Ligero.Concrete
 import LeanLongfellow.Ligero.FiatShamir
+import LeanLongfellow.Ligero.ProbabilisticE2E
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
