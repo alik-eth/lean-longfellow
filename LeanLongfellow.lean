@@ -31,6 +31,7 @@ import LeanLongfellow.Circuit.Probability
 import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
+import LeanLongfellow.Circuit.ECArith
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.Word32
