@@ -17,3 +17,4 @@ import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
 import LeanLongfellow.Circuit.Reduction
+import LeanLongfellow.Circuit.Composition
