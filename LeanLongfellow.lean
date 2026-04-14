@@ -33,7 +33,10 @@ import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.Word32
+import LeanLongfellow.Circuit.SHA256Round
 import LeanLongfellow.Predicate.Defs
 import LeanLongfellow.Predicate.Correctness
 import LeanLongfellow.Escrow.Defs
 import LeanLongfellow.Escrow.Correctness
+import LeanLongfellow.Merkle.Defs
+import LeanLongfellow.Merkle.Correctness
