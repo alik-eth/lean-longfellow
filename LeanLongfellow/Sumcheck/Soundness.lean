@@ -4,61 +4,46 @@ import Mathlib.Algebra.Polynomial.Roots
 
 /-! # Sumcheck Soundness
 
-This file proves two results about the soundness of the sumcheck protocol:
+This file proves two soundness results for the sumcheck protocol:
 
-1. `roots_le_one_of_deg_le_one`: a nonzero polynomial of degree ≤ 1 has at most
-   one root in any finite set (a special case of the Schwartz-Zippel lemma).
-
-2. `sumcheck_soundness_det`: deterministic soundness — if the verifier accepts
+1. `sumcheck_soundness_det`: deterministic soundness — if the verifier accepts
    with a wrong claim, then there exists a round where the prover's polynomial
    differs from the honest polynomial, and the challenge is a root of that
-   nonzero difference polynomial of degree ≤ 1.
+   nonzero difference polynomial of degree ≤ d.
+
+2. `sumcheck_soundness_concrete`: like `sumcheck_soundness_det`, but the
+   witness diff is pinned to the concrete difference between prover and honest
+   polynomials.
 -/
 
 open Finset Polynomial MultilinearPoly
 
 variable {F : Type*} [Field F] [DecidableEq F]
 
-/-- A nonzero polynomial of degree ≤ 1 has at most 1 root in any finite set. -/
-theorem roots_le_one_of_deg_le_one {p : F[X]} (hp : p ≠ 0) (hdeg : p.natDegree ≤ 1)
-    (S : Finset F) :
-    (S.filter (fun r => p.eval r = 0)).card ≤ 1 := by
-  have h1 : (S.filter (fun r => p.eval r = 0)).card ≤ p.roots.toFinset.card := by
-    apply Finset.card_le_card
-    intro x hx
-    rw [Finset.mem_filter] at hx
-    rw [Multiset.mem_toFinset]
-    rw [Polynomial.mem_roots hp]
-    exact Polynomial.IsRoot.def.mpr hx.2
-  have h2 : p.roots.toFinset.card ≤ p.roots.card :=
-    Multiset.toFinset_card_le p.roots
-  have h3 : p.roots.card ≤ p.natDegree :=
-    Polynomial.card_roots' p
-  omega
-
 /-- **Sumcheck deterministic soundness.**
 
 If the verifier accepts a claimed sum that differs from the true sum,
-then there exists a round `i` and a nonzero polynomial `diff` of degree ≤ 1
+then there exists a round `i` and a nonzero polynomial `diff` of degree ≤ d
 whose evaluation at the challenge `rounds i` is zero.
 
 The proof proceeds by induction on `n`: if the claimed sum is wrong, either
 round 0's prover polynomial differs from the honest polynomial (and the
 challenge hits a root of their difference), or the claim propagates incorrectly
 to the next round, and we recurse. -/
-theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum : F)
+theorem sumcheck_soundness_det {n : ℕ} {d : ℕ} (p : MultilinearPoly F n) (claimed_sum : F)
     (rounds : Fin n → SumcheckRound F)
     (hn : 0 < n)
+    (hd : 1 ≤ d)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
     (haccept : verifierAccepts p claimed_sum rounds)
-    (hdeg : ∀ i : Fin n, (rounds i).prover_poly.natDegree ≤ 1) :
-    ∃ i : Fin n, ∃ (diff : F[X]), diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
+    (hdeg : ∀ i : Fin n, (rounds i).prover_poly.natDegree ≤ d) :
+    ∃ i : Fin n, ∃ (diff : F[X]), diff ≠ 0 ∧ diff.natDegree ≤ d ∧
       diff.eval (rounds i).challenge = 0 := by
-  revert p claimed_sum rounds hn hclaim haccept hdeg
+  revert p claimed_sum rounds hn hd hclaim haccept hdeg
   induction n with
   | zero => intro _ _ _ hn; omega
   | succ m ih =>
-    intro p claimed_sum rounds _hn hclaim haccept hdeg
+    intro p claimed_sum rounds _hn hd hclaim haccept hdeg
     obtain ⟨haccept_sum, haccept_final⟩ := haccept
     -- Round 0 polynomials
     set g₀ := (rounds 0).prover_poly with hg₀_def
@@ -75,9 +60,9 @@ theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum 
     -- Difference polynomial
     set diff₀ := g₀ - h₀
     have hdiff₀_ne : diff₀ ≠ 0 := sub_ne_zero.mpr hg₀_ne_h₀
-    have hdiff₀_deg : diff₀.natDegree ≤ 1 := by
+    have hdiff₀_deg : diff₀.natDegree ≤ d := by
       calc diff₀.natDegree ≤ max g₀.natDegree h₀.natDegree := natDegree_sub_le g₀ h₀
-      _ ≤ 1 := Nat.max_le.mpr ⟨hdeg 0, sumFirstVar_natDegree_le p⟩
+      _ ≤ d := Nat.max_le.mpr ⟨hdeg 0, le_trans (sumFirstVar_natDegree_le p) hd⟩
     by_cases hdiff₀_eval : diff₀.eval r₀ = 0
     · exact ⟨0, diff₀, hdiff₀_ne, hdiff₀_deg, hdiff₀_eval⟩
     · -- g₀(r₀) ≠ h₀(r₀), so the propagated claim is wrong
@@ -89,7 +74,7 @@ theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum 
           (partialEval_table_sum p r₀).symm]
       -- Build verifierAccepts for the reduced protocol
       set rounds' : Fin m → SumcheckRound F := fun j => rounds j.succ
-      have hdeg' : ∀ i : Fin m, (rounds' i).prover_poly.natDegree ≤ 1 := fun i => hdeg i.succ
+      have hdeg' : ∀ i : Fin m, (rounds' i).prover_poly.natDegree ≤ d := fun i => hdeg i.succ
       -- Simplify haccept_final
       have hfinal : (rounds ⟨m, by omega⟩).prover_poly.eval
             (rounds ⟨m, by omega⟩).challenge =
@@ -173,7 +158,7 @@ theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum 
         convert hfinal using 1
       | succ m' =>
         obtain ⟨j, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩ :=
-          ih reduced (g₀.eval r₀) rounds' (by omega) hclaim' haccept' hdeg'
+          ih reduced (g₀.eval r₀) rounds' (by omega) hd hclaim' haccept' hdeg'
         exact ⟨j.succ, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩
 
 /-- **Concrete sumcheck soundness.**
@@ -181,12 +166,12 @@ theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum 
 Like `sumcheck_soundness_det`, but the witness diff is pinned to
 `rounds(i).prover_poly - (honestProver p challenges i).prover_poly`
 where `challenges k = (rounds k).challenge`. -/
-theorem sumcheck_soundness_concrete {n : ℕ} (p : MultilinearPoly F n) (claimed_sum : F)
+theorem sumcheck_soundness_concrete {n : ℕ} {d : ℕ} (p : MultilinearPoly F n) (claimed_sum : F)
     (rounds : Fin n → SumcheckRound F)
     (hn : 0 < n)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
     (haccept : verifierAccepts p claimed_sum rounds)
-    (hdeg : ∀ i : Fin n, (rounds i).prover_poly.natDegree ≤ 1) :
+    (hdeg : ∀ i : Fin n, (rounds i).prover_poly.natDegree ≤ d) :
     let challenges := fun k => (rounds k).challenge
     ∃ i : Fin n,
       (rounds i).prover_poly ≠ (honestProver p challenges i).prover_poly ∧
@@ -209,9 +194,6 @@ theorem sumcheck_soundness_concrete {n : ℕ} (p : MultilinearPoly F n) (claimed
       intro heq; exact hclaim (hg₀_sum.symm.trans (by rw [heq]; exact hh₀_sum))
     set diff₀ := g₀ - h₀
     have hdiff₀_ne : diff₀ ≠ 0 := sub_ne_zero.mpr hg₀_ne_h₀
-    have hdiff₀_deg : diff₀.natDegree ≤ 1 := by
-      calc diff₀.natDegree ≤ max g₀.natDegree h₀.natDegree := natDegree_sub_le g₀ h₀
-      _ ≤ 1 := Nat.max_le.mpr ⟨hdeg 0, sumFirstVar_natDegree_le p⟩
     by_cases hdiff₀_eval : diff₀.eval r₀ = 0
     · -- Round 0 is the witness
       refine ⟨0, ?_, ?_⟩
@@ -227,7 +209,7 @@ theorem sumcheck_soundness_concrete {n : ℕ} (p : MultilinearPoly F n) (claimed
         rwa [← show h₀.eval r₀ = ∑ b, reduced.table b from
           (partialEval_table_sum p r₀).symm]
       set rounds' : Fin m → SumcheckRound F := fun j => rounds j.succ
-      have hdeg' : ∀ i : Fin m, (rounds' i).prover_poly.natDegree ≤ 1 := fun i => hdeg i.succ
+      have hdeg' : ∀ i : Fin m, (rounds' i).prover_poly.natDegree ≤ d := fun i => hdeg i.succ
       -- Build verifierAccepts for the reduced protocol (same as before)
       have hfinal : (rounds ⟨m, by omega⟩).prover_poly.eval
             (rounds ⟨m, by omega⟩).challenge =

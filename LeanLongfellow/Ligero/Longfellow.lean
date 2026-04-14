@@ -161,7 +161,7 @@ theorem longfellow_soundness {n : ℕ}
     fun i => polyFromEvals_natDegree _ _
   -- Step 4: sumcheck_soundness_det gives root hit
   obtain ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩ :=
-    sumcheck_soundness_det p claimed_sum (decodeRounds w challenges) hn hclaim hva hdeg
+    sumcheck_soundness_det p claimed_sum (decodeRounds w challenges) hn (by omega) hclaim hva hdeg
   -- Step 5: The challenge in decoded rounds IS challenges i
   simp only [decodeRounds] at hdiff_eval
   exact ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩
