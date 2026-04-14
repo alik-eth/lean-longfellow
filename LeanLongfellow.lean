@@ -31,3 +31,7 @@ import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECDSA
+import LeanLongfellow.Predicate.Defs
+import LeanLongfellow.Predicate.Correctness
+import LeanLongfellow.Escrow.Defs
+import LeanLongfellow.Escrow.Correctness
