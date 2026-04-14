@@ -32,6 +32,7 @@ import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.Gadgets
+import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Predicate.Defs
 import LeanLongfellow.Predicate.Correctness
 import LeanLongfellow.Escrow.Defs
