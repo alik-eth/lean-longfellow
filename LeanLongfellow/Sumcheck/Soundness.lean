@@ -175,3 +175,121 @@ theorem sumcheck_soundness_det {n : ℕ} (p : MultilinearPoly F n) (claimed_sum 
         obtain ⟨j, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩ :=
           ih reduced (g₀.eval r₀) rounds' (by omega) hclaim' haccept' hdeg'
         exact ⟨j.succ, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩
+
+/-- **Concrete sumcheck soundness.**
+
+Like `sumcheck_soundness_det`, but the witness diff is pinned to
+`rounds(i).prover_poly - (honestProver p challenges i).prover_poly`
+where `challenges k = (rounds k).challenge`. -/
+theorem sumcheck_soundness_concrete {n : ℕ} (p : MultilinearPoly F n) (claimed_sum : F)
+    (rounds : Fin n → SumcheckRound F)
+    (hn : 0 < n)
+    (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
+    (haccept : verifierAccepts p claimed_sum rounds)
+    (hdeg : ∀ i : Fin n, (rounds i).prover_poly.natDegree ≤ 1) :
+    let challenges := fun k => (rounds k).challenge
+    ∃ i : Fin n,
+      (rounds i).prover_poly ≠ (honestProver p challenges i).prover_poly ∧
+      ((rounds i).prover_poly - (honestProver p challenges i).prover_poly).eval
+        (rounds i).challenge = 0 := by
+  simp only
+  revert p claimed_sum rounds hn hclaim haccept hdeg
+  induction n with
+  | zero => intro _ _ _ hn; omega
+  | succ m ih =>
+    intro p claimed_sum rounds _hn hclaim haccept hdeg
+    obtain ⟨haccept_sum, haccept_final⟩ := haccept
+    set g₀ := (rounds 0).prover_poly with hg₀_def
+    set h₀ := p.sumFirstVar with hh₀_def
+    set r₀ := (rounds 0).challenge with hr₀_def
+    have hg₀_sum : g₀.eval 0 + g₀.eval 1 = claimed_sum := by
+      have := haccept_sum (0 : Fin (m + 1)); simp at this; exact this
+    have hh₀_sum : h₀.eval 0 + h₀.eval 1 = ∑ b, p.table b := sumFirstVar_sum p
+    have hg₀_ne_h₀ : g₀ ≠ h₀ := by
+      intro heq; exact hclaim (hg₀_sum.symm.trans (by rw [heq]; exact hh₀_sum))
+    set diff₀ := g₀ - h₀
+    have hdiff₀_ne : diff₀ ≠ 0 := sub_ne_zero.mpr hg₀_ne_h₀
+    have hdiff₀_deg : diff₀.natDegree ≤ 1 := by
+      calc diff₀.natDegree ≤ max g₀.natDegree h₀.natDegree := natDegree_sub_le g₀ h₀
+      _ ≤ 1 := Nat.max_le.mpr ⟨hdeg 0, sumFirstVar_natDegree_le p⟩
+    by_cases hdiff₀_eval : diff₀.eval r₀ = 0
+    · -- Round 0 is the witness
+      refine ⟨0, ?_, ?_⟩
+      · simp only [honestProver_zero]; exact hg₀_ne_h₀
+      · simp only [honestProver_zero]
+        show (g₀ - h₀).eval r₀ = 0
+        exact hdiff₀_eval
+    · -- Propagate to next round (same as sumcheck_soundness_det)
+      have heval_ne : g₀.eval r₀ ≠ h₀.eval r₀ := by
+        intro heq; exact hdiff₀_eval (by simp [diff₀, Polynomial.eval_sub, heq])
+      set reduced := p.partialEvalFirst r₀
+      have hclaim' : g₀.eval r₀ ≠ ∑ b, reduced.table b := by
+        rwa [← show h₀.eval r₀ = ∑ b, reduced.table b from
+          (partialEval_table_sum p r₀).symm]
+      set rounds' : Fin m → SumcheckRound F := fun j => rounds j.succ
+      have hdeg' : ∀ i : Fin m, (rounds' i).prover_poly.natDegree ≤ 1 := fun i => hdeg i.succ
+      -- Build verifierAccepts for the reduced protocol (same as before)
+      have hfinal : (rounds ⟨m, by omega⟩).prover_poly.eval
+            (rounds ⟨m, by omega⟩).challenge =
+          p.eval (fun i => (rounds i).challenge) :=
+        haccept_final (by omega)
+      have haccept'_sum : ∀ i : Fin m,
+          (rounds' i).prover_poly.eval 0 + (rounds' i).prover_poly.eval 1 =
+            if (i : ℕ) = 0 then g₀.eval r₀
+            else (rounds' ⟨i.val - 1, by omega⟩).prover_poly.eval
+                  (rounds' ⟨i.val - 1, by omega⟩).challenge := by
+        intro i
+        have horig := haccept_sum i.succ
+        simp only [show (i.succ : ℕ) ≠ 0 from Nat.succ_ne_zero _, ↓reduceIte] at horig
+        have hfin : (⟨(i.succ : ℕ) - 1, by omega⟩ : Fin (m + 1)) = ⟨i.val, by omega⟩ := by
+          ext; simp
+        rw [hfin] at horig
+        split
+        · rename_i hi0
+          have : (⟨i.val, by omega⟩ : Fin (m + 1)) = 0 := by ext; exact hi0
+          rw [this] at horig; exact horig
+        · rename_i hi_ne
+          have : (⟨i.val - 1, by omega⟩ : Fin m).succ = (⟨i.val, by omega⟩ : Fin (m + 1)) := by
+            ext; simp; omega
+          simp only [rounds'] at horig ⊢; rw [this]; exact horig
+      have haccept'_final : ∀ (hm : 0 < m),
+          let last : Fin m := ⟨m - 1, by omega⟩
+          (rounds' last).prover_poly.eval (rounds' last).challenge =
+            reduced.eval (fun i => (rounds' i).challenge) := by
+        intro hm; simp only
+        have hlast : (⟨m - 1, by omega⟩ : Fin m).succ = (⟨m, by omega⟩ : Fin (m + 1)) := by
+          ext; simp; omega
+        simp only [rounds'] at hfinal ⊢
+        rw [hlast, hfinal, partialEvalFirst_eval]
+        congr 1; funext i
+        refine Fin.cases ?_ (fun j => ?_) i
+        · simp [Fin.cons_zero, hr₀_def]
+        · simp [Fin.cons_succ]
+      have haccept' : verifierAccepts reduced (g₀.eval r₀) rounds' :=
+        ⟨haccept'_sum, haccept'_final⟩
+      cases m with
+      | zero =>
+        exfalso; apply hclaim'
+        have h0sum : ∀ (q : MultilinearPoly F 0) (x : Fin 0 → F),
+            ∑ b : Fin 0 → Bool, q.table b = q.eval x := by
+          intro q x
+          have hsub : ∀ (b : Fin 0 → Bool), b = Fin.elim0 :=
+            fun b => funext (fun i => Fin.elim0 i)
+          simp only [MultilinearPoly.eval, lagrangeBasis]
+          rw [Fintype.sum_eq_single Fin.elim0 (fun b hb => absurd (hsub b) hb),
+              Fintype.sum_eq_single Fin.elim0 (fun b hb => absurd (hsub b) hb)]
+          simp [Finset.prod_empty]
+        rw [h0sum reduced Fin.elim0, partialEvalFirst_eval]
+        simp only [g₀, r₀] at hfinal ⊢
+        convert hfinal using 1
+      | succ m' =>
+        -- IH gives us j for the reduced protocol
+        have challenges'_eq : (fun k => (rounds' k).challenge) = fun k => (rounds k.succ).challenge := rfl
+        obtain ⟨j, hj_ne, hj_eval⟩ :=
+          ih reduced (g₀.eval r₀) rounds' (by omega) hclaim' haccept' hdeg'
+        refine ⟨j.succ, ?_, ?_⟩
+        · -- After simp, the goal unfolds honestProver at j.succ to honestProver on reduced
+          simp only [honestProver_succ]
+          exact hj_ne
+        · simp only [honestProver_succ]
+          exact hj_eval

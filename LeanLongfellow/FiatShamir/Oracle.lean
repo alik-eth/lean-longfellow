@@ -102,6 +102,73 @@ theorem countSat_union_bound {F : Type*} [DecidableEq F] [Fintype F]
 
 variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
 
+/-- If `D(cs)` depends on all coordinates except `i`, has degree ≤ 1, and we count
+    the `cs` where `D(cs) ≠ 0` and `D(cs).eval(cs i) = 0`, the count is ≤ `|F|^(n-1)`.
+
+    Proof: split by the `n-1` coordinates other than `i`. For each such fiber,
+    `D` is constant (by `hD_indep`). If `D = 0` the `≠ 0` condition fails;
+    if `D ≠ 0` at most one value of `cs i` is a root. So each fiber contributes
+    at most 1, and there are `|F|^(n-1)` fibers. -/
+theorem countSat_adaptive_root {n : ℕ} (i : Fin n)
+    (D : RandomChallenges F n → Polynomial F)
+    (hD_indep : ∀ cs cs', (∀ j, j ≠ i → cs j = cs' j) → D cs = D cs')
+    (hD_deg : ∀ cs, (D cs).natDegree ≤ 1) :
+    countSat (fun cs => D cs ≠ 0 ∧ (D cs).eval (cs i) = 0) ≤
+      Fintype.card F ^ (n - 1) := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, (Nat.succ_pred_eq_of_pos (Fin.pos i)).symm⟩
+  simp only [Nat.add_sub_cancel]
+  -- Inject the satisfying set into (Fin m → F) by dropping coordinate i.
+  -- Since |Fin m → F| = |F|^m, this gives the bound.
+  rw [show Fintype.card F ^ m = (Finset.univ : Finset (Fin m → F)).card from
+      by rw [Finset.card_univ, card_randomChallenges]]
+  unfold countSat
+  apply Finset.card_le_card_of_injOn
+    (fun cs => fun j => cs (i.succAbove j))
+    (fun _ _ => Finset.mem_univ _)
+  -- Injectivity: if two satisfying cs agree on all coords ≠ i, they must agree on i too
+  -- because D(cs) is the same nonzero polynomial and both cs i are roots, but deg ≤ 1
+  -- means at most 1 root.
+  intro cs₁ hcs₁ cs₂ hcs₂ heq
+  simp only [Finset.mem_coe, Finset.mem_filter] at hcs₁ hcs₂
+  have hcs₁_sat := hcs₁.2
+  have hcs₂_sat := hcs₂.2
+  -- cs₁ and cs₂ agree on all coords ≠ i
+  have hagree : ∀ j, j ≠ i → cs₁ j = cs₂ j := by
+    intro j hj
+    obtain ⟨k, rfl⟩ := Fin.exists_succAbove_eq hj
+    exact congr_fun heq k
+  -- D cs₁ = D cs₂ (by independence)
+  have hDeq : D cs₁ = D cs₂ := hD_indep cs₁ cs₂ hagree
+  -- Both cs₁ i and cs₂ i are roots of D cs₁, which is nonzero with deg ≤ 1
+  have hne : D cs₁ ≠ 0 := hcs₁_sat.1
+  have hroot₁ : (D cs₁).IsRoot (cs₁ i) := Polynomial.IsRoot.def.mpr hcs₁_sat.2
+  have hroot₂ : (D cs₁).IsRoot (cs₂ i) := Polynomial.IsRoot.def.mpr (hDeq ▸ hcs₂_sat.2)
+  -- A nonzero poly of degree ≤ 1 has at most 1 root
+  have hdeg₁ := hD_deg cs₁
+  have hcard : (D cs₁).roots.toFinset.card ≤ 1 := by
+    calc (D cs₁).roots.toFinset.card
+        ≤ (D cs₁).roots.card := Multiset.toFinset_card_le _
+      _ ≤ (D cs₁).natDegree := card_roots' _
+      _ ≤ 1 := hdeg₁
+  have hmem₁ : cs₁ i ∈ (D cs₁).roots.toFinset :=
+    Multiset.mem_toFinset.mpr ((mem_roots hne).mpr hroot₁)
+  have hmem₂ : cs₂ i ∈ (D cs₁).roots.toFinset :=
+    Multiset.mem_toFinset.mpr ((mem_roots hne).mpr hroot₂)
+  have heq_i : cs₁ i = cs₂ i := by
+    have : (D cs₁).roots.toFinset.card ≤ 1 := hcard
+    have hsub : {cs₁ i, cs₂ i} ⊆ (D cs₁).roots.toFinset :=
+      Finset.insert_subset_iff.mpr ⟨hmem₁, Finset.singleton_subset_iff.mpr hmem₂⟩
+    by_contra hne_val
+    have : 2 ≤ (D cs₁).roots.toFinset.card := by
+      calc 2 = ({cs₁ i, cs₂ i} : Finset F).card := by
+            rw [Finset.card_pair hne_val]
+        _ ≤ (D cs₁).roots.toFinset.card := Finset.card_le_card hsub
+    omega
+  funext j
+  by_cases hj : j = i
+  · subst hj; exact heq_i
+  · exact hagree j hj
+
 /-- A nonzero polynomial of degree ≤ 1 vanishes on at most `|F|^(n-1)` challenge
     vectors at any given coordinate. -/
 theorem countSat_root_hit {n : ℕ} (i : Fin n)

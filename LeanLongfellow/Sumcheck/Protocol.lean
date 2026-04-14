@@ -55,3 +55,16 @@ noncomputable def honestProver {F : Type*} [Field F] {n : ℕ} :
       honestProver (p.partialEvalFirst (challenges 0))
         (fun k => challenges k.succ) j := by
   simp [honestProver, Fin.cases]
+
+/-- The honest prover's polynomial at every round has degree ≤ 1. -/
+theorem honestProver_deg_le {F : Type*} [Field F] {n : ℕ}
+    (p : MultilinearPoly F n) (cs : Fin n → F) (i : Fin n) :
+    (honestProver p cs i).prover_poly.natDegree ≤ 1 := by
+  revert p cs i
+  induction n with
+  | zero => intro _ _ i; exact Fin.elim0 i
+  | succ m ih =>
+    intro p cs i
+    refine Fin.cases ?_ (fun j => ?_) i
+    · simp [honestProver_zero, sumFirstVar_natDegree_le]
+    · simp only [honestProver_succ]; exact ih _ _ j

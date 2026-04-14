@@ -43,6 +43,28 @@ private theorem countSat_mono {F : Type*} [DecidableEq F] [Fintype F] {n : ℕ}
   rw [Finset.mem_filter] at hcs ⊢
   exact ⟨hcs.1, h cs hcs.2⟩
 
+omit [DecidableEq F] [Fintype F] in
+/-- The honest prover's polynomial at round `i` depends only on `cs j` for `j < i`. -/
+private theorem honestProver_poly_indep :
+    ∀ {n : ℕ} (p : MultilinearPoly F n) (i : Fin n) (a b : Fin n → F),
+    (∀ j : Fin n, j.val < i.val → a j = b j) →
+    (honestProver p a i).prover_poly = (honestProver p b i).prover_poly := by
+  intro n
+  induction n with
+  | zero => intro _ i; exact Fin.elim0 i
+  | succ m ih =>
+    intro p i a b hab
+    rcases Fin.eq_zero_or_eq_succ i with rfl | ⟨j, rfl⟩
+    · simp [honestProver_zero]
+    · simp only [honestProver_succ]
+      have h0 : a 0 = b 0 := hab 0 (by show 0 < j.val + 1; omega)
+      rw [h0]
+      apply ih
+      intro k hk
+      apply hab k.succ
+      show k.val + 1 < j.val + 1
+      omega
+
 /-- **Fiat-Shamir ROM Soundness.**
 For any non-adaptive adversary, if the claimed sum is wrong,
 the number of challenge vectors that fool the verifier is at most `n * |F|^(n-1)`.
@@ -58,33 +80,68 @@ theorem fiatShamir_soundness {n : ℕ}
       (adversary cs).round_polys i = (adversary cs').round_polys i) :
     countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs) ≤
       n * Fintype.card F ^ (n - 1) := by
-  -- Per-round bad event: there exists a nonzero deg-≤-1 poly vanishing at cs i
-  let P : Fin n → RandomChallenges F n → Prop := fun i cs =>
-    ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧ diff.eval (cs i) = 0
+  -- Per-round bad event using the CONCRETE diff between adversary and honest polys.
+  -- The diff at round i: adversary's poly minus honest prover's poly.
+  let D : Fin n → RandomChallenges F n → Polynomial F := fun i cs =>
+    (adversary cs).round_polys i - (honestProver p cs i).prover_poly
+  -- Per-round predicate: the concrete diff is nonzero and vanishes at cs i
+  let Q : Fin n → RandomChallenges F n → Prop := fun i cs =>
+    D i cs ≠ 0 ∧ (D i cs).eval (cs i) = 0
   -- Step 1: Show the bad set is contained in the union of per-round bad events
-  suffices h_sub : ∀ cs, fsVerifierAccepts p claimed_sum (adversary cs) cs → ∃ i, P i cs by
+  suffices h_sub : ∀ cs, fsVerifierAccepts p claimed_sum (adversary cs) cs → ∃ i, Q i cs by
     -- Step 2: Apply union bound
     calc countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs)
-        ≤ countSat (fun cs => ∃ i : Fin n, P i cs) :=
+        ≤ countSat (fun cs => ∃ i : Fin n, Q i cs) :=
           countSat_mono h_sub
       _ ≤ n * Fintype.card F ^ (n - 1) := by
-          have h_bound : ∀ j : Fin n, countSat (P j) ≤ Fintype.card F ^ (n - 1) := by
+          have h_bound : ∀ j : Fin n, countSat (Q j) ≤ Fintype.card F ^ (n - 1) := by
             intro i
-            -- The hard step: for each round i, the bad set has size ≤ |F|^(n-1).
-            -- By non-adaptivity, the diff polynomial at round i depends only on cs j for j < i.
-            -- For each fixed assignment of earlier coordinates, diff is determined.
-            -- Since diff ≠ 0 with deg ≤ 1, at most 1 value of cs i works.
-            -- The remaining n - i - 1 later coordinates are free.
-            -- Total: |F|^i * 1 * |F|^(n-i-1) = |F|^(n-1).
-            sorry
-          exact countSat_union_bound P h_bound
-  -- Step 1 proof: connect to sumcheck_soundness_det
+            -- D i cs depends only on coords ≠ i:
+            -- - adversary's poly at round i depends on cs j for j < i (non-adaptivity)
+            -- - honest prover's poly at round i depends on cs j for j < i
+            -- So D i cs is independent of cs i (and also of cs j for j > i).
+            apply countSat_adaptive_root i (D i)
+            · -- Independence: D i cs depends only on cs j for j < i, hence not on cs i
+              intro cs cs' hagree
+              simp only [D]
+              congr 1
+              · -- adversary polys: by non-adaptivity, depends on cs j for j < i
+                apply h_nonadaptive cs cs' i
+                intro j hj
+                exact hagree j (by omega)
+              · -- honest prover polys: depends on cs j for j < i
+                exact honestProver_poly_indep p i cs cs'
+                  (fun j hj => hagree j (by omega))
+            · -- Degree bound
+              intro cs
+              simp only [D]
+              calc ((adversary cs).round_polys i - (honestProver p cs i).prover_poly).natDegree
+                  ≤ max ((adversary cs).round_polys i).natDegree
+                        ((honestProver p cs i).prover_poly).natDegree :=
+                    Polynomial.natDegree_sub_le _ _
+                _ ≤ 1 := Nat.max_le.mpr ⟨hdeg cs i, honestProver_deg_le p cs i⟩
+          exact countSat_union_bound Q h_bound
+  -- Step 1 proof: use sumcheck_soundness_concrete to get the concrete diff
   intro cs hfs
   have haccept : verifierAccepts p claimed_sum (toRounds (adversary cs) cs) := hfs
   have hdeg_rounds : ∀ i : Fin n, (toRounds (adversary cs) cs i).prover_poly.natDegree ≤ 1 :=
     fun i => by simp only [toRounds]; exact hdeg cs i
-  obtain ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩ :=
-    sumcheck_soundness_det p claimed_sum (toRounds (adversary cs) cs) hn hclaim haccept hdeg_rounds
-  exact ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩
+  obtain ⟨i, hi_ne, hi_eval⟩ :=
+    sumcheck_soundness_concrete p claimed_sum (toRounds (adversary cs) cs) hn hclaim haccept hdeg_rounds
+  -- The challenges of toRounds are cs
+  have hchal : (fun k => (toRounds (adversary cs) cs k).challenge) = cs := by
+    funext k; simp [toRounds]
+  -- Rewrite hi_ne to use cs directly
+  rw [hchal] at hi_ne
+  -- hi_ne : (toRounds ...).prover_poly ≠ (honestProver p cs i).prover_poly
+  simp only [toRounds] at hi_ne
+  -- hi_ne : (adversary cs).round_polys i ≠ (honestProver p cs i).prover_poly
+  refine ⟨i, ?_, ?_⟩
+  · -- D i cs ≠ 0
+    simp only [D]
+    exact sub_ne_zero.mpr hi_ne
+  · -- (D i cs).eval (cs i) = 0
+    simp only [D]
+    exact hi_eval
 
 end
