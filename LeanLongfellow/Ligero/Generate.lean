@@ -100,7 +100,7 @@ theorem eval_deg_le_one (p : F[X]) (hdeg : p.natDegree ≤ 1) (r : F) :
 /-- Helper: the sparse sum for row i of generateConstraints reduces to the
     nonzero terms. This is the hard index-arithmetic step involving
     Finset.sum simplification with conditional matrix entries. -/
-private theorem sparse_sum_eq {n : ℕ} (claimed_sum : F)
+theorem sparse_sum_eq {n : ℕ} (claimed_sum : F)
     (challenges : Fin n → F) (w : Fin (witnessSize n) → F) (i : Fin n) :
     ∑ j : Fin (witnessSize n), (generateConstraints claimed_sum challenges).matrix i j * w j =
       w ⟨2 * i.val, by unfold witnessSize; omega⟩ +
@@ -115,7 +115,7 @@ private theorem sparse_sum_eq {n : ℕ} (claimed_sum : F)
 
 /-- Helper: the sparse sum for generateFinalConstraint reduces to the
     nonzero terms. -/
-private theorem sparse_final_sum_eq {n : ℕ} (hn : 0 < n)
+theorem sparse_final_sum_eq {n : ℕ} (hn : 0 < n)
     (p : MultilinearPoly F n) (challenges : Fin n → F)
     (w : Fin (witnessSize n) → F) :
     ∑ j : Fin (witnessSize n),
