@@ -9,9 +9,3 @@ import LeanLongfellow.Field.Basic
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Transform
 import LeanLongfellow.FiatShamir.Soundness
-import LeanLongfellow.GKR.Circuit
-import LeanLongfellow.GKR.Combining
-import LeanLongfellow.GKR.LayerReduction
-import LeanLongfellow.GKR.Pad
-import LeanLongfellow.GKR.PadZK
-import LeanLongfellow.GKR.Composition
