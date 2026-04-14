@@ -40,6 +40,7 @@ import LeanLongfellow.Predicate.Defs
 import LeanLongfellow.Predicate.Correctness
 import LeanLongfellow.Escrow.Defs
 import LeanLongfellow.Escrow.Correctness
+import LeanLongfellow.Escrow.SHA256Bridge
 import LeanLongfellow.Merkle.Defs
 import LeanLongfellow.Merkle.Correctness
 import LeanLongfellow.Poseidon.Defs
