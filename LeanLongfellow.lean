@@ -29,3 +29,4 @@ import LeanLongfellow.Circuit.Reduction
 import LeanLongfellow.Circuit.Composition
 import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.Examples
+import LeanLongfellow.Circuit.ECDSA
