@@ -5,6 +5,7 @@ import LeanLongfellow.MLE.Props
 import LeanLongfellow.Sumcheck.Protocol
 import LeanLongfellow.Sumcheck.Completeness
 import LeanLongfellow.Sumcheck.Soundness
+import LeanLongfellow.Sumcheck.Pad
 import LeanLongfellow.Field.Basic
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Transform
