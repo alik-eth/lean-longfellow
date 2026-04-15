@@ -7,6 +7,7 @@ import LeanLongfellow.Sumcheck.Completeness
 import LeanLongfellow.Sumcheck.Soundness
 import LeanLongfellow.Sumcheck.Pad
 import LeanLongfellow.Field.Basic
+import LeanLongfellow.Field.Pocklington
 import LeanLongfellow.Field.P256
 import LeanLongfellow.Field.P256Curve
 import LeanLongfellow.Field.Subfield
@@ -46,6 +47,7 @@ import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.ECDSACircuit
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.GadgetGates
+import LeanLongfellow.Circuit.ECDSAFieldOps
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
 import LeanLongfellow.Circuit.SHA256
