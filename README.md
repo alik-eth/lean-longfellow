@@ -1,6 +1,8 @@
 # LeanLongfellow
 
-Formal verification of [Longfellow](https://github.com/AudiusProject/audius-protocol), Google's Sumcheck + Ligero zero-knowledge proving system, and the [zk-eIDAS](https://digital-strategy.ec.europa.eu/en/policies/eidas-regulation) electronic identity protocol built on top of it. Written in Lean 4 with Mathlib.
+Formal verification of [Longfellow](https://github.com/google/longfellow-zk), Google's Sumcheck + Ligero zero-knowledge proving system, and the [zk-eIDAS](https://digital-strategy.ec.europa.eu/en/policies/eidas-regulation) electronic identity protocol built on top of it. Written in Lean 4 with Mathlib.
+
+zk-eIDAS extends Longfellow with privacy-preserving credential predicates (age verification, set membership, range proofs), contract-scoped nullifiers for replay prevention, Poseidon-based holder binding for cross-credential linking, and SHA-256-based escrow digests for court-ordered identity recovery.
 
 This project produces the first mechanized soundness proof for any Longfellow component, suitable for IETF standardization ([draft-google-cfrg-libzk](https://datatracker.ietf.org/doc/draft-google-cfrg-libzk/)) and eIDAS trust service certification.
 
@@ -15,7 +17,7 @@ The capstone theorem `zkEidas_full_soundness` ([EndToEnd.lean](LeanLongfellow/En
 5. **Fiat-Shamir probability bound** — cheating probability bounded by `n * d / |F|`
 6. **Predicate/nullifier/escrow binding** — application-level security properties from collision resistance
 
-All 346 theorems are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry` or `admit` statements.
+All theorems (310+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry` or `admit` statements.
 
 ## Building
 
@@ -29,7 +31,7 @@ curl https://elan-init.trycloudflare.com/ -sSf | sh
 lake build
 ```
 
-Lean version is pinned in `lean-toolchain` to `leanprover/lean4:v4.30.0-rc1`. Mathlib is fetched automatically by Lake.
+Lean version is pinned in `lean-toolchain` to `leanprover/lean4:v4.30.0-rc1`. Mathlib is fetched automatically by Lake. First build takes ~5 minutes with cached Mathlib oleans.
 
 ## Project Structure
 
