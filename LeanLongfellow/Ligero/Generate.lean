@@ -65,6 +65,61 @@ noncomputable def generateFinalConstraint {n : ℕ}
     else 0
   target _ := p.eval challenges
 
+/-- Combined constraint system: n sumcheck constraints + 1 final evaluation constraint.
+    Rows 0..n-1 are from `generateConstraints`, row n is from `generateFinalConstraint`. -/
+noncomputable def generateAllConstraints {n : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F)
+    (challenges : Fin n → F) : LinearConstraints F (n + 1) (witnessSize n) where
+  matrix i j :=
+    if h : i.val < n then
+      (generateConstraints claimed_sum challenges).matrix ⟨i.val, h⟩ j
+    else
+      (generateFinalConstraint p challenges).matrix ⟨0, by omega⟩ j
+  target i :=
+    if h : i.val < n then
+      (generateConstraints claimed_sum challenges).target ⟨i.val, h⟩
+    else
+      (generateFinalConstraint p challenges).target ⟨0, by omega⟩
+
+/-- Satisfaction of the combined constraints implies satisfaction of both parts. -/
+theorem satisfiesAllConstraints_split {n : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F) (challenges : Fin n → F)
+    (w : Fin (witnessSize n) → F)
+    (h : satisfiesLinear w (generateAllConstraints p claimed_sum challenges)) :
+    satisfiesLinear w (generateConstraints claimed_sum challenges) ∧
+    satisfiesLinear w (generateFinalConstraint p challenges) := by
+  constructor
+  · intro i
+    have hi := h ⟨i.val, by omega⟩
+    -- Rewrite the sum: each summand's matrix entry equals the constraint matrix entry
+    have hrow : ∀ j : Fin (witnessSize n),
+        (generateAllConstraints p claimed_sum challenges).matrix ⟨i.val, by omega⟩ j * w j =
+        (generateConstraints claimed_sum challenges).matrix i j * w j := by
+      intro j; congr 1; simp [generateAllConstraints, i.isLt]
+    rw [Finset.sum_congr rfl (fun j _ => hrow j)] at hi
+    -- Rewrite the target
+    have htgt : (generateAllConstraints p claimed_sum challenges).target ⟨i.val, by omega⟩ =
+        (generateConstraints claimed_sum challenges).target i := by
+      simp [generateAllConstraints, i.isLt]
+    rw [htgt] at hi
+    exact hi
+  · intro i
+    have : i = ⟨0, by omega⟩ := Fin.ext (by omega)
+    rw [this]
+    have hn := h ⟨n, by omega⟩
+    -- Rewrite the sum
+    have hrow : ∀ j : Fin (witnessSize n),
+        (generateAllConstraints p claimed_sum challenges).matrix ⟨n, by omega⟩ j * w j =
+        (generateFinalConstraint p challenges).matrix ⟨0, by omega⟩ j * w j := by
+      intro j; congr 1; simp [generateAllConstraints]
+    rw [Finset.sum_congr rfl (fun j _ => hrow j)] at hn
+    -- Rewrite the target
+    have htgt : (generateAllConstraints p claimed_sum challenges).target ⟨n, by omega⟩ =
+        (generateFinalConstraint p challenges).target ⟨0, by omega⟩ := by
+      simp [generateAllConstraints]
+    rw [htgt] at hn
+    exact hn
+
 /-- Generate quadratic constraints from the witness encoding.
     Currently returns no constraints since the witness has no product structure.
     When padding is added, this will encode pad_left · pad_right = pad_product. -/

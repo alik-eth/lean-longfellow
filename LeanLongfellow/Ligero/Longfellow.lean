@@ -136,7 +136,7 @@ theorem witness_satisfies_implies_verifierAccepts {n : ℕ}
     2. Constraint satisfaction → verifierAccepts on decoded rounds
     3. sumcheck_soundness_det → root hit -/
 theorem longfellow_soundness {n : ℕ}
-    [L : LigeroScheme F (witnessSize n) n q]
+    [L : LigeroScheme F (witnessSize n) (n + 1) q]
     (p : MultilinearPoly F n) (claimed_sum : F)
     (hn : 0 < n)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
@@ -144,25 +144,24 @@ theorem longfellow_soundness {n : ℕ}
     (challenges : Fin n → F)
     (qcs : Fin q → QuadConstraint (witnessSize n))
     (ligeroProof : L.Proof)
-    -- Ligero accepted with constraints generated from this sumcheck
+    -- Ligero accepted with ALL constraints (n sumcheck + 1 final)
     (hligero : L.verify (L.commit w)
-      (generateConstraints claimed_sum challenges) qcs ligeroProof)
-    -- Final constraint also verified by Ligero (can be part of the same system)
-    (hfinal : satisfiesLinear w (generateFinalConstraint p challenges)) :
+      (generateAllConstraints p claimed_sum challenges) qcs ligeroProof) :
     ∃ i : Fin n, ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
       diff.eval (challenges i) = 0 := by
-  -- Step 1: Ligero binding gives constraint satisfaction
-  have hbinding := L.binding w (generateConstraints claimed_sum challenges) qcs ligeroProof hligero
-  have h_sat := hbinding.1
-  -- Step 2: Constraint satisfaction → verifierAccepts on decoded rounds
-  have hva := witness_satisfies_implies_verifierAccepts p claimed_sum challenges w h_sat hfinal
-  -- Step 3: Decoded rounds have degree ≤ 1
+  -- Step 1: Ligero binding gives satisfaction of all constraints
+  have hbinding := L.binding w (generateAllConstraints p claimed_sum challenges) qcs ligeroProof hligero
+  -- Step 2: Split into sumcheck constraints + final constraint
+  have ⟨h_sat, h_final⟩ := satisfiesAllConstraints_split p claimed_sum challenges w hbinding.1
+  -- Step 3: Constraint satisfaction → verifierAccepts on decoded rounds
+  have hva := witness_satisfies_implies_verifierAccepts p claimed_sum challenges w h_sat h_final
+  -- Step 4: Decoded rounds have degree ≤ 1
   have hdeg : ∀ i, (decodeRounds w challenges i).prover_poly.natDegree ≤ 1 :=
     fun i => polyFromEvals_natDegree _ _
-  -- Step 4: sumcheck_soundness_det gives root hit
+  -- Step 5: sumcheck_soundness_det gives root hit
   obtain ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩ :=
     sumcheck_soundness_det p claimed_sum (decodeRounds w challenges) hn (by omega) hclaim hva hdeg
-  -- Step 5: The challenge in decoded rounds IS challenges i
+  -- Step 6: The challenge in decoded rounds IS challenges i
   simp only [decodeRounds] at hdiff_eval
   exact ⟨i, diff, hdiff_ne, hdiff_deg, hdiff_eval⟩
 
@@ -173,7 +172,7 @@ theorem longfellow_soundness {n : ℕ}
 /-- Corollary: if Ligero binding holds, NO witness+proof pair makes the
     verifier accept a wrong claim (without hitting a root). -/
 theorem longfellow_no_false_accept {n : ℕ}
-    [L : LigeroScheme F (witnessSize n) n q]
+    [L : LigeroScheme F (witnessSize n) (n + 1) q]
     (p : MultilinearPoly F n) (claimed_sum : F)
     (hn : 0 < n)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
@@ -182,8 +181,7 @@ theorem longfellow_no_false_accept {n : ℕ}
     (qcs : Fin q → QuadConstraint (witnessSize n))
     (ligeroProof : L.Proof)
     (hligero : L.verify (L.commit w)
-      (generateConstraints claimed_sum challenges) qcs ligeroProof)
-    (hfinal : satisfiesLinear w (generateFinalConstraint p challenges)) :
+      (generateAllConstraints p claimed_sum challenges) qcs ligeroProof) :
     ∃ i : Fin n, ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
       diff.eval (challenges i) = 0 :=
-  longfellow_soundness p claimed_sum hn hclaim w challenges qcs ligeroProof hligero hfinal
+  longfellow_soundness p claimed_sum hn hclaim w challenges qcs ligeroProof hligero

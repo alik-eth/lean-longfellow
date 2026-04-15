@@ -242,28 +242,26 @@ theorem zkEidas_fiatShamir_bound [Fintype F] {n d : ℕ}
 -- Section 9: Full composition narrative
 -- ============================================================
 
-/-- **Full zk-eIDAS security narrative (deterministic core):**
+/-- **Full zk-eIDAS security composition:**
 
-    Given:
-    1. An ECDSA circuit specification with extraction property
-    2. A GKR proof that the verifier accepts
-    3. A predicate specification with Poseidon-committed claim value
-    4. An escrow digest commitment
-    5. A nullifier for replay prevention
+    Composes all five security properties into a single theorem:
 
-    Conclusion (by contrapositive of `zkEidas_soundness_det`):
-    - If no sumcheck challenge hits a polynomial root, then `ecdsaVerify` holds.
-    - If `ecdsaVerify` holds and the commitment is correct, the predicate
-      holds on the committed claim (by `zkEidas_predicate_soundness`).
-    - The escrow lets an authority recover the fields
-      (by `zkEidas_escrow_integrity`).
-    - The nullifier prevents double-use of the credential
-      (by `zkEidas_nullifier_binding`).
+    1. **ECDSA soundness** — if no sumcheck challenge hits a polynomial root,
+       the ECDSA signature is valid (from GKR composition + Schwartz-Zippel).
+    2. **Predicate binding** — any alternative claim matching the same Poseidon
+       commitment satisfies the predicate (from collision resistance, NOT
+       trivially from the input hypothesis).
+    3. **Escrow integrity** — the authority can recover the original fields
+       from the escrow digest (from CRHash collision resistance).
+    4. **Nullifier binding** — same nullifier implies same credential, contract,
+       and salt (from Poseidon collision resistance).
+    5. **Holder binding** — same holder hash implies same holder identity
+       (from Poseidon collision resistance).
 
     The probability that a random challenge hits a root is bounded by the
     Schwartz-Zippel lemma, which feeds into `zkEidas_fiatShamir_bound`. -/
 theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
-    [LinearOrder F]
+    [PoseidonHash F 1] [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (proof : ZkEidasProof F s NL z Q sig)
@@ -273,12 +271,36 @@ theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
     (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
       ∀ diff : F[X], diff ≠ 0 -> diff.natDegree ≤ 2 ->
       diff.eval ((proof.reductions k).rounds i).challenge ≠ 0)
-    -- Predicate setup
+    -- Collision resistance hypotheses
+    (hcr3 : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
+    (hcr1 : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
+    -- Predicate setup (with commitment binding — claim' is ANY value
+    -- producing the same commitment, not the original claim)
     (spec : PredicateSpec F)
-    (claim sd_hash msg_hash : F)
+    (claim sd_hash msg_hash claim' sd_hash' msg_hash' : F)
     (commitment : F)
-    (_h_comm : predicateCommitment claim sd_hash msg_hash = commitment)
-    (h_pred : predicateHolds spec claim) :
-    -- Then: ECDSA verifies AND predicate holds
-    ecdsaVerify z Q sig ∧ predicateHolds spec claim :=
-  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root, h_pred⟩
+    (h_comm : predicateCommitment claim sd_hash msg_hash = commitment)
+    (h_comm' : predicateCommitment claim' sd_hash' msg_hash' = commitment)
+    (h_pred : predicateHolds spec claim)
+    -- Escrow
+    (original decrypted : EscrowFields F) (digest : F)
+    (h_escrow_commit : escrowCommitmentCorrect original digest)
+    (h_escrow_verify : escrowAuthorityVerifies decrypted digest)
+    -- Nullifier
+    (cred1 cred2 contract1 contract2 salt1 salt2 : F)
+    (h_null : nullifier cred1 contract1 salt1 = nullifier cred2 contract2 salt2)
+    -- Holder binding
+    (attr1 attr2 : F)
+    (h_holder : holderBindingHash attr1 = holderBindingHash attr2) :
+    -- FULL CONCLUSION: all five security properties
+    ecdsaVerify z Q sig ∧
+    predicateHolds spec claim' ∧
+    original = decrypted ∧
+    (cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2) ∧
+    attr1 = attr2 :=
+  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root,
+   zkEidas_predicate_soundness spec claim sd_hash msg_hash claim' sd_hash'
+     msg_hash' commitment hcr3 h_comm h_comm' h_pred,
+   zkEidas_escrow_integrity original decrypted digest h_escrow_commit h_escrow_verify,
+   zkEidas_nullifier_binding cred1 cred2 contract1 contract2 salt1 salt2 hcr3 h_null,
+   zkEidas_holder_binding attr1 attr2 hcr1 h_holder⟩

@@ -242,7 +242,7 @@ theorem satisfiesAll_implies_threeTestVerify {params : LigeroParams} {m n q : �
 theorem concrete_longfellow_soundness
     (F : Type) [Field F] [DecidableEq F]
     {n q : ℕ}
-    [L : LigeroScheme F (witnessSize n) n q]
+    [L : LigeroScheme F (witnessSize n) (n + 1) q]
     (p : MultilinearPoly F n) (claimed_sum : F)
     (hn : 0 < n)
     (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
@@ -251,8 +251,7 @@ theorem concrete_longfellow_soundness
     (qcs : Fin q → QuadConstraint (witnessSize n))
     (ligeroProof : L.Proof)
     (hligero : L.verify (L.commit w)
-      (generateConstraints claimed_sum challenges) qcs ligeroProof)
-    (hfinal : satisfiesLinear w (generateFinalConstraint p challenges)) :
+      (generateAllConstraints p claimed_sum challenges) qcs ligeroProof) :
     ∃ i : Fin n, ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
       diff.eval (challenges i) = 0 :=
-  longfellow_soundness p claimed_sum hn hclaim w challenges qcs ligeroProof hligero hfinal
+  longfellow_soundness p claimed_sum hn hclaim w challenges qcs ligeroProof hligero
