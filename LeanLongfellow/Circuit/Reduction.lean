@@ -86,6 +86,102 @@ theorem layer_reduction_soundness_general (layer : CircuitLayer F s)
     (combiningPolyMLE layer t V_next)
     claimed_val red.rounds hs (by omega) hclaim' haccept hdeg
 
+-- ============================================================
+-- Round-only acceptance and final evaluation check
+-- ============================================================
+
+/-- Round-only layer reduction acceptance: only the sumcheck round
+    consistency conditions, WITHOUT the final evaluation check.
+
+    In the real GKR protocol, the verifier checks round consistency at
+    each intermediate layer but cannot perform the final evaluation
+    check (which requires oracle access to V_{k+1}). The final
+    evaluation is deferred to the next layer's reduction. -/
+def layerReductionRoundsAccept (_layer : CircuitLayer F s)
+    (_t : Fin s → F) (claimed_val : F)
+    (_V_next : LayerValues F s)
+    (red : LayerReduction F s) : Prop :=
+  ∀ i : Fin (2 * s),
+    (red.rounds i).prover_poly.eval 0 + (red.rounds i).prover_poly.eval 1 =
+      if (i : ℕ) = 0 then claimed_val
+      else (red.rounds ⟨i.val - 1, by omega⟩).prover_poly.eval
+            (red.rounds ⟨i.val - 1, by omega⟩).challenge
+
+/-- The final evaluation check for a layer reduction: the last round's
+    polynomial evaluates to the combining polynomial's MLE evaluation
+    at the challenge points. -/
+def layerReductionFinalCheck (layer : CircuitLayer F s)
+    (t : Fin s → F)
+    (V_next : LayerValues F s)
+    (red : LayerReduction F s)
+    (_hs : 0 < 2 * s) : Prop :=
+  let last : Fin (2 * s) := ⟨2 * s - 1, by omega⟩
+  (red.rounds last).prover_poly.eval (red.rounds last).challenge =
+    (combiningPolyMLE layer t V_next).eval (fun i => (red.rounds i).challenge)
+
+omit [DecidableEq F] in
+/-- `layerReductionAccepts` is equivalent to round acceptance AND
+    the final evaluation check. -/
+theorem layerReductionAccepts_iff_rounds_and_final
+    (layer : CircuitLayer F s) (t : Fin s → F) (claimed_val : F)
+    (V_next : LayerValues F s) (red : LayerReduction F s)
+    (hs : 0 < 2 * s) :
+    layerReductionAccepts layer t claimed_val V_next red ↔
+    (layerReductionRoundsAccept layer t claimed_val V_next red ∧
+     layerReductionFinalCheck layer t V_next red hs) := by
+  simp only [layerReductionAccepts, layerReductionRoundsAccept,
+    layerReductionFinalCheck, verifierAccepts]
+  constructor
+  · intro ⟨hrounds, hfinal⟩
+    exact ⟨hrounds, hfinal hs⟩
+  · intro ⟨hrounds, hfinal⟩
+    exact ⟨hrounds, fun _ => hfinal⟩
+
+omit [DecidableEq F] in
+/-- `layerReductionAccepts` implies round acceptance. -/
+theorem layerReductionAccepts_rounds (layer : CircuitLayer F s)
+    (t : Fin s → F) (claimed_val : F)
+    (V_next : LayerValues F s) (red : LayerReduction F s) :
+    layerReductionAccepts layer t claimed_val V_next red →
+    layerReductionRoundsAccept layer t claimed_val V_next red := by
+  intro ⟨hrounds, _⟩
+  exact hrounds
+
+/-- **Layer reduction propagation:** if the round checks pass, degree
+    bounds hold, and the claim is wrong, then EITHER there is a root
+    hit at some round OR the residual differs from the true evaluation.
+
+    This is the key lemma for multi-layer GKR: when no root hit occurs,
+    the wrong claim "survives" the sumcheck and produces a wrong residual,
+    which then propagates as a wrong claim to the next layer. -/
+theorem layer_reduction_propagation (layer : CircuitLayer F s)
+    (t : Fin s → F) (claimed_val : F)
+    (V_curr V_next : LayerValues F s)
+    (red : LayerReduction F s)
+    (hs : 0 < 2 * s)
+    (hcons : ∀ g, layerConsistent layer V_curr V_next g)
+    (hclaim : claimed_val ≠ V_curr.eval t)
+    (hround : layerReductionRoundsAccept layer t claimed_val V_next red)
+    (hdeg : ∀ i, (red.rounds i).prover_poly.natDegree ≤ 2) :
+    (∃ i : Fin (2 * s), ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 2 ∧
+      diff.eval (red.rounds i).challenge = 0) ∨
+    ¬ layerReductionFinalCheck layer t V_next red hs := by
+  -- By excluded middle on the final check
+  by_cases hfinal : layerReductionFinalCheck layer t V_next red hs
+  · -- Final check passes: full layerReductionAccepts holds
+    left
+    have haccept : layerReductionAccepts layer t claimed_val V_next red :=
+      ⟨hround, fun _ => hfinal⟩
+    exact layer_reduction_soundness_general layer t claimed_val V_curr V_next red
+      hs hcons hclaim haccept hdeg
+  · -- Final check fails: right disjunct
+    right
+    exact hfinal
+
+-- ============================================================
+-- Claim extraction and combination
+-- ============================================================
+
 /-- After the reduction, extract the two claims on V_{i+1}. -/
 noncomputable def extractClaims (V_next : LayerValues F s)
     (red : LayerReduction F s) : F × F :=
