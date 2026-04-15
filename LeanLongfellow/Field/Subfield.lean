@@ -170,13 +170,16 @@ theorem gf2_128_card : Fintype.card GF2_128 = 2 ^ 128 := by
   rw [Fintype.card_eq_nat_card, GaloisField.card 2 (n := 128) (by omega)]
 
 /-- There exists an embedding GF(2^16) →+* GF(2^128).
-    This follows from 16 | 128 and the classification of finite field extensions.
-
-    The actual construction goes through Mathlib's splitting field machinery;
-    we axiomatize the ring hom for now because building it requires navigating
-    Galois field API that is computationally expensive. -/
+    This follows from 16 | 128 and the classification of finite field extensions. -/
 noncomputable instance gf2_subfield_embed_exists :
-    Nonempty (GF2_16 →+* GF2_128) := ⟨sorry⟩
+    Nonempty (GF2_16 →+* GF2_128) :=
+  have : Fintype GF2_16 := Fintype.ofFinite _
+  have : Fintype GF2_128 := Fintype.ofFinite _
+  have hdvd : Module.finrank (ZMod 2) GF2_16 ∣ Module.finrank (ZMod 2) GF2_128 := by
+    rw [GaloisField.finrank 2 (by omega : (16 : ℕ) ≠ 0),
+        GaloisField.finrank 2 (by omega : (128 : ℕ) ≠ 0)]
+    omega
+  (FiniteField.nonempty_algHom_of_finrank_dvd hdvd).map AlgHom.toRingHom
 
 /-- The concrete `SubfieldPair` instance for Longfellow's GF(2^16) ⊂ GF(2^128). -/
 noncomputable instance : SubfieldPair GF2_16 GF2_128 where
