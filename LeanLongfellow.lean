@@ -16,6 +16,7 @@ import LeanLongfellow.Ligero.Interface
 import LeanLongfellow.Ligero.Generate
 import LeanLongfellow.Ligero.Longfellow
 import LeanLongfellow.Ligero.ReedSolomon.Defs
+import LeanLongfellow.Ligero.ReedSolomon.ConcreteDomain
 import LeanLongfellow.Ligero.ReedSolomon.Proximity
 import LeanLongfellow.Ligero.Tableau
 import LeanLongfellow.Ligero.Tests.Linear
