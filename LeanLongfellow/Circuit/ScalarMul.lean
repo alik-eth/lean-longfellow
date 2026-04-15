@@ -301,6 +301,105 @@ theorem chainBitsToBool_agree (n : ℕ) (scalar_bits : Fin n → F)
 -- Section 9: Bridge to abstract EllipticCurve via CurveInstantiation
 -- ============================================================
 
+/-- Auxiliary: the chain invariant holds at every step k ≤ n. -/
+private theorem scalarMulChain_invariant [EllipticCurve F] [inst : CurveInstantiation F]
+    (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
+    (P_abs : EllipticCurve.Point (F := F))
+    (hP : P = inst.toECPoint P_abs)
+    (intermediates : Fin (n + 1) → ECPoint F)
+    (doubled : Fin n → ECPoint F)
+    (double_lambdas add_lambdas : Fin n → F)
+    (hchain : ecScalarMulChain inst.params n scalar_bits P intermediates doubled
+      double_lambdas add_lambdas)
+    (bits_bool : Fin n → Bool)
+    (hbits_agree : ∀ i : Fin n, scalar_bits i = if bits_bool i then (1 : F) else 0)
+    (k : ℕ) (hk : k ≤ n) :
+    intermediates ⟨k, by omega⟩ =
+      inst.toECPoint (doubleAndAdd k (fun i => bits_bool ⟨i.val, by omega⟩) P_abs) := by
+  induction k with
+  | zero =>
+    rw [hchain.2.1, doubleAndAdd_zero]
+    exact inst.identity_toECPoint.symm
+  | succ k ih =>
+    have hk' : k < n := by omega
+    have hk_le : k ≤ n := by omega
+    -- IH for step k
+    have ih_k := ih hk_le
+    -- The chain step at index k
+    have hstep := hchain.2.2 ⟨k, hk'⟩
+    -- Set up the abstract accumulator at step k
+    set Q_k := doubleAndAdd k (fun i => bits_bool ⟨i.val, by omega⟩) P_abs with hQ_k_def
+    -- intermediates ⟨k, _⟩ = toECPoint Q_k (from IH)
+    have h_int_k : intermediates ⟨k, by omega⟩ = inst.toECPoint Q_k := ih_k
+    -- castSucc of ⟨k, hk'⟩ is ⟨k, _⟩
+    have h_cast : (⟨k, hk'⟩ : Fin n).castSucc = ⟨k, by omega⟩ := rfl
+    -- Show doubled k = toECPoint (pointAdd Q_k Q_k) by case split on Q_k
+    have h_doubled : doubled ⟨k, hk'⟩ =
+        inst.toECPoint (EllipticCurve.pointAdd Q_k Q_k) := by
+      by_cases hid : Q_k = EllipticCurve.identity
+      case pos =>
+        -- Q_k is identity, so intermediates k has is_inf = 1
+        have hinf : (intermediates (⟨k, hk'⟩ : Fin n).castSucc).is_inf = 1 := by
+          rw [h_cast, h_int_k, hid]; exact inst.identity_agree
+        -- Chain says doubled k = ⟨0, 0, 1⟩
+        rw [hstep.1 hinf]
+        -- Need ⟨0, 0, 1⟩ = toECPoint (pointAdd identity identity)
+        -- Construct ecAddFull for identity + identity → identity
+        have h_ecAddFull : ecAddFull inst.params (inst.toECPoint EllipticCurve.identity)
+            (inst.toECPoint EllipticCurve.identity)
+            (inst.toECPoint EllipticCurve.identity) 0 := by
+          refine ⟨fun _ => rfl, fun _ => rfl, ?_, ?_, ?_⟩
+          · intro h1 _ _ _; exact absurd h1 (by rw [inst.identity_agree]; exact one_ne_zero)
+          · intro h1 _ _ _; exact absurd h1 (by rw [inst.identity_agree]; exact one_ne_zero)
+          · intro h1 _ _; exact absurd h1 (by rw [inst.identity_agree]; exact one_ne_zero)
+        have := inst.pointAdd_agree EllipticCurve.identity EllipticCurve.identity
+          (inst.toECPoint EllipticCurve.identity) 0 h_ecAddFull
+        rw [hid, ← this, inst.identity_toECPoint]
+      case neg =>
+        -- Q_k ≠ identity, so intermediates k has is_inf = 0
+        have hfin_Q : (inst.toECPoint Q_k).is_inf = 0 :=
+          inst.nonIdentity_is_fin Q_k hid
+        have hfin : (intermediates (⟨k, hk'⟩ : Fin n).castSucc).is_inf = 0 := by
+          rw [h_cast, h_int_k]; exact hfin_Q
+        -- Chain gives ecDoubleConstraint
+        have hdbl := hstep.2.1 hfin
+        -- Rewrite to use toECPoint Q_k
+        rw [h_cast, h_int_k] at hdbl
+        exact inst.doublePoint_agree Q_k _ _ hfin_Q hdbl
+    -- Now handle the conditional add step
+    rw [doubleAndAdd_succ]
+    -- The chain step gives ecCondAdd for step k
+    have h_cond := hstep.2.2
+    -- ⟨k, hk'⟩.succ = ⟨k+1, _⟩
+    have h_succ : (⟨k, hk'⟩ : Fin n).succ = ⟨k + 1, by omega⟩ := rfl
+    rw [h_succ] at h_cond
+    -- Get the bit value
+    have hbit_k := hbits_agree ⟨k, hk'⟩
+    -- Split on bits_bool k
+    show intermediates ⟨k + 1, by omega⟩ =
+      inst.toECPoint (let acc := Q_k
+        let doubled := EllipticCurve.pointAdd acc acc
+        if bits_bool ⟨k, by omega⟩ then EllipticCurve.pointAdd doubled P_abs else doubled)
+    simp only []
+    by_cases hb : bits_bool ⟨k, by omega⟩
+    case pos =>
+      -- bit = true, so scalar_bits k = 1
+      rw [if_pos hb]
+      have hbit_one : scalar_bits ⟨k, hk'⟩ = 1 := by rw [hbit_k, if_pos hb]
+      rw [hbit_one] at h_cond
+      have h_add_full := ecCondAdd_one inst.params (doubled ⟨k, hk'⟩) P
+        (intermediates ⟨k + 1, by omega⟩) (add_lambdas ⟨k, hk'⟩) h_cond
+      rw [h_doubled, hP] at h_add_full
+      exact inst.pointAdd_agree (EllipticCurve.pointAdd Q_k Q_k) P_abs _ _ h_add_full
+    case neg =>
+      -- bit = false, so scalar_bits k = 0
+      rw [if_neg hb]
+      have hbit_zero : scalar_bits ⟨k, hk'⟩ = 0 := by rw [hbit_k, if_neg hb]
+      rw [hbit_zero] at h_cond
+      have h_eq := ecCondAdd_zero inst.params (doubled ⟨k, hk'⟩) P
+        (intermediates ⟨k + 1, by omega⟩) (add_lambdas ⟨k, hk'⟩) h_cond
+      rw [h_eq, h_doubled]
+
 /-- **Bridge theorem:** The `ecScalarMulChain` result, when embedded via
     `CurveInstantiation.toECPoint`, equals `doubleAndAdd`.
 
@@ -308,16 +407,11 @@ theorem chainBitsToBool_agree (n : ℕ) (scalar_bits : Fin n → F)
     with field-element coordinates) to the abstract `doubleAndAdd` specification
     (which operates on `EllipticCurve.Point`).
 
-    The proof requires showing at each inductive step that:
+    The proof proceeds by induction on the step index, showing at each step that:
     1. The doubling constraint produces the correct doubled point
+       (via `CurveInstantiation.doublePoint_agree` and `identity_toECPoint`)
     2. The conditional add produces the correct next accumulator
-    3. The `toECPoint` embedding preserves these relationships
-
-    This is the hardest part of the scalar multiplication formalization,
-    requiring `CurveInstantiation.pointAdd_agree` at each inductive step,
-    plus validity preservation through doubling and conditional addition.
-    The bridge between constraint-level `ECPoint` operations and abstract
-    `EllipticCurve.Point` operations is where `CurveInstantiation` enters. -/
+       (via `CurveInstantiation.pointAdd_agree`) -/
 theorem scalarMulChain_matches_doubleAndAdd [EllipticCurve F] [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
@@ -331,7 +425,10 @@ theorem scalarMulChain_matches_doubleAndAdd [EllipticCurve F] [inst : CurveInsta
     (hbits_agree : ∀ i : Fin n, scalar_bits i = if bits_bool i then (1 : F) else 0) :
     intermediates ⟨n, by omega⟩ =
       inst.toECPoint (doubleAndAdd n bits_bool P_abs) := by
-  sorry
+  have h := scalarMulChain_invariant n scalar_bits P P_abs hP intermediates doubled
+    double_lambdas add_lambdas hchain bits_bool hbits_agree n (le_refl n)
+  simp only [Fin.eta] at h
+  exact h
 
 -- ============================================================
 -- Section 10: doubleAndAdd from bit decomposition

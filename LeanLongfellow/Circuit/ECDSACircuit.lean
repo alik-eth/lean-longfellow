@@ -110,9 +110,19 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] where
     p3 = toECPoint (EllipticCurve.pointAdd P Q)
   /-- The abstract identity maps to the ECPoint infinity. -/
   identity_agree : (toECPoint EllipticCurve.identity).is_inf = 1
+  /-- The abstract identity maps to the canonical ECPoint at infinity. -/
+  identity_toECPoint : toECPoint EllipticCurve.identity = ⟨0, 0, 1⟩
   /-- Non-identity points have is_inf = 0. -/
   nonIdentity_is_fin : ∀ (p : EllipticCurve.Point (F := F)),
     p ≠ EllipticCurve.identity → (toECPoint p).is_inf = 0
+  /-- Doubling at the constraint level matches abstract point doubling.
+      When a finite point (toECPoint P) satisfies ecDoubleConstraint,
+      the result equals toECPoint (pointAdd P P). -/
+  doublePoint_agree : ∀ (P : EllipticCurve.Point (F := F))
+    (d : ECPoint F) (lam : F),
+    (toECPoint P).is_inf = 0 →
+    ecDoubleConstraint params (toECPoint P) d lam →
+    d = toECPoint (EllipticCurve.pointAdd P P)
 
 -- ============================================================
 -- Section 3: Extraction Theorem
