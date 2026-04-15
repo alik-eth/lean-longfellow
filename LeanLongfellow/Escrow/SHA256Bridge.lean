@@ -8,8 +8,13 @@ escrow commitment model.
 
 ## Architecture
 
-The escrow digest is `SHA-256(field[0] || ... || field[7])` over 256 bytes
-(8 x 32 bytes), requiring 5 SHA-256 blocks (4 data blocks + 1 padding block).
+The escrow digest hashes 8 credential field values via SHA-256. At the circuit
+level, each field is a 32-bit word (`Fin 32 → F`), so the input is
+8 × 32 bits = 256 bits = 32 bytes, fitting in a single 512-bit SHA-256 block.
+
+(In a full deployment the escrow input may be 8 × 32 *bytes* = 256 bytes,
+requiring 5 SHA-256 blocks. The current formalization covers the single-block
+case; multi-block chaining is future work.)
 
 - **Abstract side** (`Escrow/Defs.lean`): `CRHash (EscrowFields F) F` models
   collision-resistant hashing as an injective function.
@@ -92,8 +97,8 @@ theorem escrowSHA256Digest_eq_escrowDigest [SHA256Spec F]
 
 /-- Representation of the escrow input at the circuit level.
     Each of the 8 escrow fields is represented as a 32-bit word
-    (Fin 32 -> F), so the full input is 8 x 32 = 256 bits per field,
-    packed into SHA-256 message blocks. -/
+    (Fin 32 -> F), so the full input is 8 words × 32 bits = 256 bits,
+    fitting in a single SHA-256 block. -/
 def EscrowCircuitInput (F : Type*) := Fin 8 → (Fin 32 → F)
 
 /-- Validity: every word in the escrow circuit input is a proper 32-bit word. -/
@@ -105,14 +110,8 @@ def EscrowCircuitInput.valid [Field F] (input : EscrowCircuitInput F) : Prop :=
     Since each field is only 1 word (32 bits) but a SHA-256 block is 16 words,
     we pack fields into successive word positions.
 
-    For a full 256-byte escrow input, the packing into 4 blocks is:
-    - Block 0: words from field[0] and field[1] (padded to 16 words)
-    - Block 1: words from field[2] and field[3]
-    - Block 2: words from field[4] and field[5]
-    - Block 3: words from field[6] and field[7]
-
-    This function captures the layout for a single block holding 2 fields
-    in the first 2 word positions, with remaining positions zeroed. -/
+    This function packs 2 fields into a single 16-word SHA-256 block,
+    placing them at word positions 0 and 1, with remaining positions zeroed. -/
 def packEscrowBlock [Field F] (f0 f1 : Fin 32 → F) :
     Fin 16 → (Fin 32 → F) :=
   fun i =>
@@ -154,10 +153,9 @@ theorem sha256_circuit_implies_crhash [Field F] [SHA256Constants F]
 -- Section 5: Multi-block structure
 -- ============================================================
 
-/-- The number of SHA-256 compression calls needed for the escrow digest.
-    The 8 escrow fields (each 32 bits at the circuit level) produce
-    256 bits = 32 bytes of data. With SHA-256 padding (1 bit + length),
-    this fits in a single 512-bit block. For the full 256-byte escrow
-    input (8 x 32 bytes), 5 blocks are needed. -/
+/-- The number of SHA-256 compression calls for a full 256-byte escrow
+    input (8 × 32 bytes): 5 blocks (4 data + 1 padding). The current
+    formalization covers the single-block case (8 × 32 bits = 256 bits);
+    this constant documents the multi-block deployment scenario. -/
 theorem escrow_sha256_block_count :
     sha256_blocks_for_escrow = 5 := rfl
