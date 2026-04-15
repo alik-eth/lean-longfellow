@@ -170,7 +170,11 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 
 ## Known Limitations
 
-- **2 `sorry`s** in `Field/P256.lean`: primality of the P-256 and BN254 primes. Lean's `native_decide` cannot handle 256-bit primality in practical compilation time. These are NIST-standardized primes verifiable via external tools (e.g., ECPP certificates, PARI/GP).
+- **3 `sorry`s** remain in the codebase:
+  - `Field/P256.lean:28` — `Nat.Prime p256Prime`: primality of the P-256 prime.
+  - `Field/P256.lean:30` — `Nat.Prime bn254Prime`: primality of the BN254 prime.
+  - `Circuit/SHA256Sound.lean:99` — `word32_bits_eq_of_val_eq`: binary representation uniqueness at field level (if two field elements encode the same 32-bit word, their bit decompositions agree).
+  The two primality `sorry`s exist because Lean's `native_decide` cannot handle 256-bit primality in practical compilation time. These are NIST-standardized primes verifiable via external tools (e.g., ECPP certificates, PARI/GP). The SHA-256 `sorry` is a technical lemma about bit-level determinism that requires showing injectivity of the field-element-to-bits encoding.
 - **Collision resistance is modeled as injectivity**, which is stronger than the standard computational definition (no PPT adversary can find collisions). This is the standard approach in symbolic/algebraic formal verification, as Lean does not model computational complexity.
 - **`CurveInstantiation`** requires proof that abstract elliptic curve operations agree with the circuit constraint representation. This bridge must be verified per concrete curve instantiation.
 

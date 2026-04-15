@@ -58,18 +58,18 @@ theorem CurveParams.toWeierstrass_a₆ (params : CurveParams F) :
 
 /-- In short Weierstrass form, `negY x y = -y`. -/
 theorem shortWeierstrass_negY (params : CurveParams F) (x y : F) :
-    params.toWeierstrass.negY x y = -y := by
+    negY params.toWeierstrass x y = -y := by
   simp [negY]
 
 /-- In short Weierstrass form, `addX x₁ x₂ ℓ = ℓ² - x₁ - x₂`. -/
 theorem shortWeierstrass_addX (params : CurveParams F) (x₁ x₂ ℓ : F) :
-    params.toWeierstrass.addX x₁ x₂ ℓ = ℓ ^ 2 - x₁ - x₂ := by
+    addX params.toWeierstrass x₁ x₂ ℓ = ℓ ^ 2 - x₁ - x₂ := by
   simp [addX]
 
 /-- In short Weierstrass form, `addY x₁ x₂ y₁ ℓ = ℓ · (x₁ - addX) - y₁`. -/
 theorem shortWeierstrass_addY (params : CurveParams F) (x₁ x₂ y₁ ℓ : F) :
-    params.toWeierstrass.addY x₁ x₂ y₁ ℓ =
-      ℓ * (x₁ - params.toWeierstrass.addX x₁ x₂ ℓ) - y₁ := by
+    addY params.toWeierstrass x₁ x₂ y₁ ℓ =
+      ℓ * (x₁ - addX params.toWeierstrass x₁ x₂ ℓ) - y₁ := by
   simp [addY, negAddY, negY]
   ring
 
@@ -87,13 +87,11 @@ theorem shortWeierstrass_addY (params : CurveParams F) (x₁ x₂ y₁ ℓ : F) 
 theorem ecAdd_slope_eq_mathlibSlope (params : CurveParams F)
     (x₁ x₂ y₁ y₂ lambda : F) (hne : x₁ ≠ x₂)
     (hslope : lambda * (x₂ - x₁) = y₂ - y₁) :
-    lambda = params.toWeierstrass.slope x₁ x₂ y₁ y₂ := by
+    lambda = slope params.toWeierstrass x₁ x₂ y₁ y₂ := by
   rw [slope_of_X_ne hne]
   have hne' : x₁ - x₂ ≠ 0 := sub_ne_zero.mpr hne
   rw [eq_div_iff hne']
-  have hne'' : x₂ - x₁ ≠ 0 := sub_ne_zero.mpr (Ne.symm hne)
-  have := mul_right_cancel₀ hne'' (by ring_nf; rw [hslope]; ring : lambda * (x₁ - x₂) * (x₂ - x₁) = (y₁ - y₂) * (x₂ - x₁))
-  linarith
+  linear_combination -hslope
 
 -- ============================================================
 -- Section 4: x-coordinate agreement (addition)
@@ -107,7 +105,7 @@ theorem ecAdd_slope_eq_mathlibSlope (params : CurveParams F)
 theorem ecAdd_x_eq_mathlibAddX (params : CurveParams F)
     (x₁ x₂ x₃ lambda : F)
     (hx3 : x₃ = lambda * lambda - x₁ - x₂) :
-    x₃ = params.toWeierstrass.addX x₁ x₂ lambda := by
+    x₃ = addX params.toWeierstrass x₁ x₂ lambda := by
   rw [shortWeierstrass_addX, hx3, sq]
 
 -- ============================================================
@@ -123,7 +121,7 @@ theorem ecAdd_y_eq_mathlibAddY (params : CurveParams F)
     (x₁ x₂ x₃ y₁ y₃ lambda : F)
     (hx3 : x₃ = lambda * lambda - x₁ - x₂)
     (hy3 : y₃ = lambda * (x₁ - x₃) - y₁) :
-    y₃ = params.toWeierstrass.addY x₁ x₂ y₁ lambda := by
+    y₃ = addY params.toWeierstrass x₁ x₂ y₁ lambda := by
   rw [shortWeierstrass_addY, hy3]
   congr 1
   congr 1
@@ -145,9 +143,9 @@ theorem ecAddConstraint_matches_mathlib (params : CurveParams F)
     (p1 p2 p3 : ECPoint F) (lambda : F)
     (hadd : ecAddConstraint p1 p2 p3 lambda)
     (hne : p1.x ≠ p2.x) :
-    lambda = params.toWeierstrass.slope p1.x p2.x p1.y p2.y ∧
-    p3.x = params.toWeierstrass.addX p1.x p2.x lambda ∧
-    p3.y = params.toWeierstrass.addY p1.x p2.x p1.y lambda := by
+    lambda = slope params.toWeierstrass p1.x p2.x p1.y p2.y ∧
+    p3.x = addX params.toWeierstrass p1.x p2.x lambda ∧
+    p3.y = addY params.toWeierstrass p1.x p2.x p1.y lambda := by
   obtain ⟨_, _, _, hslope, hx3, hy3⟩ := hadd
   exact ⟨ecAdd_slope_eq_mathlibSlope params _ _ _ _ _ hne hslope,
          ecAdd_x_eq_mathlibAddX params _ _ _ _ hx3,
@@ -158,42 +156,51 @@ theorem ecAddConstraint_matches_mathlib (params : CurveParams F)
 -- ============================================================
 
 /-- Our doubling constraint's implicit slope agrees with Mathlib's
-    `slope` in the tangent case when `y₁ ≠ 0` (short Weierstrass).
+    `slope` in the tangent case (short Weierstrass).
 
     Constraint: `λ · (2 · y₁) = 3 · x₁² + a`
-    Mathlib:    `slope x₁ x₁ y₁ y₂ = (3x₁² + a₄) / (2y₁)` (short Weierstrass, `y₁ ≠ -y₂`) -/
+    Mathlib:    `slope x₁ x₁ y₁ y₁ = (3x₁² + a₄) / (2y₁)` (short Weierstrass)
+
+    The hypothesis `y₁ + y₁ ≠ 0` (i.e. `2y₁ ≠ 0`) ensures the tangent
+    line exists.  In short Weierstrass form `negY x y = -y`, so the
+    non-degeneracy condition `y₁ ≠ negY x₁ y₁` reduces to `y₁ ≠ -y₁`,
+    equivalently `y₁ + y₁ ≠ 0`. -/
 theorem ecDouble_slope_eq_mathlibSlope (params : CurveParams F)
-    (x₁ y₁ y₂ lambda : F) (hny : y₁ ≠ 0)
+    (x₁ y₁ lambda : F) (hny : y₁ + y₁ ≠ 0)
     (hslope : lambda * (2 * y₁) = 3 * x₁ * x₁ + params.a) :
-    lambda = params.toWeierstrass.slope x₁ x₁ y₁ y₂ := by
-  have hny' : y₁ ≠ params.toWeierstrass.negY x₁ y₂ := by
-    simp [shortWeierstrass_negY]
-    intro heq
-    apply hny
-    linarith
-  rw [slope_of_Y_ne rfl hny']
-  simp [shortWeierstrass_negY, CurveParams.toWeierstrass]
-  rw [eq_div_iff (by linarith [hny] : (2 : F) * y₁ ≠ 0)]
-  linarith
+    lambda = slope params.toWeierstrass x₁ x₁ y₁ y₁ := by
+  have hneg : negY params.toWeierstrass x₁ y₁ = -y₁ := shortWeierstrass_negY params x₁ y₁
+  have hny' : y₁ ≠ negY params.toWeierstrass x₁ y₁ := by
+    rw [hneg]; intro heq
+    exact hny (by linear_combination heq)
+  rw [slope_of_Y_ne rfl hny', hneg]
+  have hden : y₁ - -y₁ ≠ 0 := by
+    intro h; exact hny (by linear_combination h)
+  simp only [CurveParams.toWeierstrass, zero_mul, mul_zero, add_zero]
+  rw [eq_div_iff hden]
+  linear_combination hslope
 
 -- ============================================================
 -- Section 8: Full doubling bridge
 -- ============================================================
 
-/-- If `ecDoubleConstraint` holds with `y₁ ≠ 0`, then the result's
+/-- If `ecDoubleConstraint` holds with `2y₁ ≠ 0`, then the result's
     coordinates agree with Mathlib's tangent-line formulas for
     short Weierstrass curves.
 
-    This is the main bridge theorem for point doubling. -/
+    This is the main bridge theorem for point doubling. The hypothesis
+    `p1.y + p1.y ≠ 0` (i.e. `2y₁ ≠ 0`) is needed because the tangent
+    slope formula divides by `2y₁`.  This holds in any field of
+    characteristic ≠ 2 whenever `y₁ ≠ 0`. -/
 theorem ecDoubleConstraint_matches_mathlib (params : CurveParams F)
-    (p1 p3 : ECPoint F) (lambda : F) (y₂ : F)
+    (p1 p3 : ECPoint F) (lambda : F)
     (hdbl : ecDoubleConstraint params p1 p3 lambda)
-    (hny : p1.y ≠ 0) :
-    lambda = params.toWeierstrass.slope p1.x p1.x p1.y y₂ ∧
-    p3.x = params.toWeierstrass.addX p1.x p1.x lambda ∧
-    p3.y = params.toWeierstrass.addY p1.x p1.x p1.y lambda := by
+    (hny : p1.y + p1.y ≠ 0) :
+    lambda = slope params.toWeierstrass p1.x p1.x p1.y p1.y ∧
+    p3.x = addX params.toWeierstrass p1.x p1.x lambda ∧
+    p3.y = addY params.toWeierstrass p1.x p1.x p1.y lambda := by
   obtain ⟨_, _, hslope, hx3, hy3⟩ := hdbl
-  refine ⟨ecDouble_slope_eq_mathlibSlope params _ _ y₂ _ hny hslope, ?_, ?_⟩
+  refine ⟨ecDouble_slope_eq_mathlibSlope params _ _ _ hny hslope, ?_, ?_⟩
   · rw [shortWeierstrass_addX, hx3, sq]
     ring
   · rw [shortWeierstrass_addY, hy3]
@@ -213,9 +220,7 @@ theorem ecDoubleConstraint_matches_mathlib (params : CurveParams F)
 theorem ecPointValid_iff_mathlibEquation (params : CurveParams F)
     (x y : F) :
     (y * y = x * x * x + params.a * x + params.b) ↔
-    params.toWeierstrass.Affine.Equation x y := by
-  rw [Affine.equation_iff']
-  simp [CurveParams.toWeierstrass]
-  constructor
-  · intro h; nlinarith [h]
-  · intro h; nlinarith [h]
+    Equation (W := params.toWeierstrass) x y := by
+  rw [equation_iff]
+  simp only [CurveParams.toWeierstrass, zero_mul, add_zero]
+  constructor <;> (intro h; ring_nf; ring_nf at h; exact h)
