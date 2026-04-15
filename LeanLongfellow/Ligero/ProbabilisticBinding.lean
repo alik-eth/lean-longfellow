@@ -22,7 +22,7 @@ achieves soundness with error `≤ 2/|F|`, not just the ideal verifier.
 
 open Finset Classical
 
-variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
+variable {F : Type*} [Field F]
 
 -- ============================================================
 -- Section 1: Binding or bad event
@@ -79,6 +79,8 @@ theorem niLigero_contrapositive {params : LigeroParams} {m n q : ℕ}
 -- ============================================================
 -- Section 3: Error probability bounds
 -- ============================================================
+
+variable [DecidableEq F] [Fintype F]
 
 /-- **Linear test bad set is small:**
     If the witness violates some linear constraint, the set of alpha

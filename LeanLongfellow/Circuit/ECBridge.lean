@@ -17,7 +17,7 @@ All theorems work in the short Weierstrass specialisation
 
 open WeierstrassCurve WeierstrassCurve.Affine
 
-variable {F : Type*} [Field F] [DecidableEq F]
+variable {F : Type*} [Field F]
 
 -- ============================================================
 -- Section 1: Short Weierstrass as WeierstrassCurve
@@ -77,6 +77,8 @@ theorem shortWeierstrass_addY (params : CurveParams F) (x₁ x₂ y₁ ℓ : F) 
 -- Section 3: Slope agreement (addition, x₁ ≠ x₂)
 -- ============================================================
 
+variable [DecidableEq F]
+
 /-- Our addition constraint's implicit slope agrees with Mathlib's
     explicit `slope` when `x₁ ≠ x₂`.
 
@@ -97,6 +99,7 @@ theorem ecAdd_slope_eq_mathlibSlope (params : CurveParams F)
 -- Section 4: x-coordinate agreement (addition)
 -- ============================================================
 
+omit [DecidableEq F] in
 /-- The x-coordinate from our addition constraint matches Mathlib's `addX`
     for short Weierstrass.
 
@@ -112,6 +115,7 @@ theorem ecAdd_x_eq_mathlibAddX (params : CurveParams F)
 -- Section 5: y-coordinate agreement (addition)
 -- ============================================================
 
+omit [DecidableEq F] in
 /-- The y-coordinate from our addition constraint matches Mathlib's `addY`
     for short Weierstrass.
 
@@ -211,6 +215,7 @@ theorem ecDoubleConstraint_matches_mathlib (params : CurveParams F)
 -- Section 9: Curve equation agreement
 -- ============================================================
 
+omit [DecidableEq F] in
 /-- Our `ecPointValid` curve equation matches Mathlib's `Equation`
     for short Weierstrass form.
 
