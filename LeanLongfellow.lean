@@ -41,6 +41,7 @@ import LeanLongfellow.Circuit.WireFormatSpec
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECArith
 import LeanLongfellow.Circuit.ECBridge
+import LeanLongfellow.Circuit.CurveInstantiation
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.ECDSACircuit
 import LeanLongfellow.Circuit.Gadgets
