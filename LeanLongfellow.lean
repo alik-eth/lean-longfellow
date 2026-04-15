@@ -23,6 +23,7 @@ import LeanLongfellow.Ligero.Tests.LowDegree
 import LeanLongfellow.Ligero.Tests.Quadratic
 import LeanLongfellow.Ligero.Soundness
 import LeanLongfellow.Ligero.Concrete
+import LeanLongfellow.Ligero.MerkleCommitment
 import LeanLongfellow.Ligero.FiatShamir
 import LeanLongfellow.Ligero.ProbabilisticE2E
 import LeanLongfellow.Circuit.Defs
@@ -35,6 +36,7 @@ import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.WireFormat
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECArith
+import LeanLongfellow.Circuit.ECBridge
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.ECDSACircuit
 import LeanLongfellow.Circuit.Gadgets
