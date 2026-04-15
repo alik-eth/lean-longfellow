@@ -8,7 +8,7 @@ This project produces the first mechanized soundness proof for any Longfellow co
 
 ## Main Results
 
-The capstone theorem `zkEidas_full_soundness` ([EndToEnd.lean](LeanLongfellow/EndToEnd.lean)) composes all five security properties into a single conjunction:
+The capstone theorems `zkEidas_full_soundness` and `zkEidasFull_soundness` ([EndToEnd.lean](LeanLongfellow/EndToEnd.lean)) compose all five security properties. The latter operates on a unified `ZkEidasFullProof` structure that bundles all proof data (GKR + predicate + escrow + nullifier + holder) into a single object with a single verifier `zkEidasFullVerify`:
 
 1. **ECDSA soundness** — if no sumcheck challenge hits a polynomial root, the ECDSA signature is valid (from GKR composition + Schwartz-Zippel)
 2. **Predicate binding** — any alternative claim matching the same Poseidon commitment satisfies the predicate (from collision resistance, non-trivially via commitment binding)
@@ -18,7 +18,7 @@ The capstone theorem `zkEidas_full_soundness` ([EndToEnd.lean](LeanLongfellow/En
 
 A strictly stronger variant `zkEidas_full_soundness_or_collision` removes all hash injectivity hypotheses. Its conclusion is a disjunction: either all five properties hold, or a concrete collision witness can be extracted for Poseidon-3, Poseidon-1, or CRHash. This makes the theorem **non-vacuous for finite fields**, where `Function.Injective (F^n → F)` is unsatisfiable by cardinality.
 
-The underlying proof chain builds on sumcheck soundness, GKR multi-layer composition, Ligero binding (with Merkle commitment), Fiat-Shamir hash-derived soundness in the Random Oracle Model, and probabilistic error bounds (`≤ 2/|F|` for Ligero, `n·d/|F|` for sumcheck).
+The underlying proof chain builds on sumcheck soundness, GKR multi-layer composition, Ligero binding (with Merkle commitment and a blind column-opening verifier), Fiat-Shamir hash-derived soundness in the Random Oracle Model, and probabilistic error bounds (`≤ 2/|F|` for Ligero, `n·d/|F|` for sumcheck, `≤ ((BLOCK-1)/NCOL)^NREQ` for the column-opening LDT).
 
 All theorems (710+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
 
@@ -63,7 +63,7 @@ LeanLongfellow/
 │   ├── Oracle.lean         # RandomChallenges, countSat, union bound
 │   ├── Transform.lean      # Interactive-to-non-interactive transform
 │   ├── Soundness.lean      # Probability bound: n*d / |F|
-│   └── HashDerived.lean    # Hash-derived challenges, ROM reduction
+│   └── HashDerived.lean    # Hash-derived challenges, ROM non-adaptivity reduction
 │
 ├── Ligero/                 # Ligero commitment scheme
 │   ├── Interface.lean      # Abstract LigeroScheme typeclass
@@ -71,7 +71,7 @@ LeanLongfellow/
 │   ├── Generate.lean       # Sumcheck -> constraint encoding
 │   ├── Longfellow.lean     # End-to-end Ligero soundness
 │   ├── Soundness.lean      # Binding from three tests
-│   ├── Concrete.lean       # Concrete instantiation
+│   ├── Concrete.lean       # Concrete instantiation (commit := id)
 │   ├── FiatShamir.lean     # Non-interactive Ligero (single-challenge)
 │   ├── ProbabilisticBinding.lean # Probabilistic binding (error ≤ 2/|F|)
 │   ├── ProbabilisticE2E.lean # Error bound composition (union bound)
@@ -79,6 +79,11 @@ LeanLongfellow/
 │   ├── Tableau.lean        # Matrix tableau representation
 │   ├── MerkleCommitment.lean # Column hash commitment (CR as explicit hyp)
 │   ├── MerkleLigeroScheme.lean # LigeroScheme instance with Merkle commitment
+│   ├── ColumnOpening.lean  # Column-opening game: blind verifier structures
+│   ├── ColumnOpeningSoundness.lean # LDT proximity bounds for column openings
+│   ├── ColumnTests.lean    # Column-level linear/quadratic spot-checks
+│   ├── BlindVerifier.lean  # Blind Ligero verifier (no witness parameter)
+│   ├── BlindScheme.lean    # LigeroScheme with real Merkle commitment
 │   ├── ReedSolomon/        # Reed-Solomon proximity testing
 │   │   ├── Defs.lean
 │   │   ├── Decode.lean     # RS decoding + knowledge extractability
@@ -165,7 +170,7 @@ LeanLongfellow/
 The formalization is structured as a layered composition. Each layer's conclusions discharge the hypotheses of the layer above.
 
 ```
-              zkEidas_full_soundness_or_collision
+              zkEidasFull_soundness_or_collision
                             |
       +----------+----------+----------+----------+
       |          |          |          |          |
@@ -189,9 +194,15 @@ The formalization is structured as a layered composition. Each layer's conclusio
                                 |
                     fiatShamir_hash_soundness
                                 |
-                 deriveChallenges + ROM reduction
+                 rom_reduces_adaptive (CommitBeforeChallenge)
                                 |
                  countSat_union_bound + countSat_adaptive_root
+
+  Blind verifier path (column-opening game):
+  blindLigeroVerify → column_opening_authentic (Merkle CR)
+      → blind_ligero_soundness → column_ldt_consistency
+      → column_ldt_detection_probability (≤ (BLOCK-1)^NREQ)
+      → blindLigeroScheme (LigeroScheme with real Merkle commitment)
 ```
 
 ## Cryptographic Assumptions
@@ -205,8 +216,8 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 | Merkle hash collision resistance | `MerkleHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
 | Column hash collision resistance | `ColumnHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
 | Generic collision resistance | `CRHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
-| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Proven (three-test + Merkle) |
-| Random oracle | `RandomOracle` | Hash-derived challenges in ROM | Reduced to random |
+| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Proven (three-test, Merkle, blind) |
+| Random oracle | `RandomOracle` | Hash-derived challenges in ROM | Reduced via `rom_reduces_adaptive` |
 | SHA-256 constants | `SHA256Constants` | NIST FIPS 180-4 round constants | Instantiated |
 | EC circuit agreement | `CurveInstantiation` | Abstract ops match circuit constraints | Instantiated (P-256) |
 | P-256 / BN254 primality | `Fact (Nat.Prime p)` | Field characteristic is prime | Proven (Pocklington) |
@@ -229,7 +240,7 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 
 **Typeclass-based crypto assumptions.** Cryptographic primitives are axiomatized as typeclasses rather than standalone axioms. This makes assumptions explicit in theorem signatures and allows concrete instantiation (e.g., `LigeroScheme` has two concrete instances).
 
-**Deterministic-first, then probability.** The core soundness chain is deterministic ("wrong claim => root hit"). Probability bounds are composed separately via `fiatShamir_hash_soundness` and `longfellow_total_error`, keeping the algebraic core clean. The probabilistic layer bridges single-challenge Ligero verification (`niLigeroVerify`) to the deterministic soundness conclusion via `ProbabilisticLongfellow.lean`.
+**Deterministic-first, then probability.** The core soundness chain is deterministic ("wrong claim => root hit"). Probability bounds are composed separately via `fiatShamir_hash_soundness` and `longfellow_total_error`, keeping the algebraic core clean. The probabilistic layer bridges single-challenge Ligero verification (`niLigeroVerify`) to the deterministic soundness conclusion via `ProbabilisticLongfellow.lean`. The blind verifier (`blindLigeroVerify`) adds a parallel path where the verifier never sees the witness — only Merkle-authenticated column openings — with RS proximity bounding the column-opening LDT error to `≤ ((BLOCK-1)/NCOL)^NREQ`. The ROM non-adaptivity reduction (`rom_reduces_adaptive`) shows that commit-before-challenge adversaries satisfy the non-adaptivity hypothesis, closing the adaptive/non-adaptive gap for Fiat-Shamir.
 
 **Two-tier ECDSA circuit.** The ECDSA verification circuit has both an abstract and a gate-level formalization. The abstract tier (`ECDSAComposition.lean`) encodes the verification predicate as a polynomial coefficient for clean extraction proofs. The gate-level tier (`ECDSAGate*.lean`, 1500+ lines) models the physical circuit with `mulPassLayer` gates across 14n+7 layers. Both produce `ECDSACircuitSpec` instances with non-vacuous extraction.
 
