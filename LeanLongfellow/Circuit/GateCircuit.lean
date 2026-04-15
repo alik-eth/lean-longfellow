@@ -411,3 +411,238 @@ theorem passthrough_exact {F : Type*} [Field F] {p : Fin 5 → Bool}
     (hzero : V_next.table W_ZERO = 0) :
     V_curr.table p = V_next.table p := by
   rw [hpass, hzero, add_zero]
+
+-- ============================================================
+-- Section 8: coeffLayer — a layer with one coefficient-valued add gate
+-- ============================================================
+
+/-- A layer with one coefficient-valued add gate: `output = coeff * (V_next(src) + V_next(W_ZERO))`.
+
+    Unlike `mulPassLayer` which uses `gatesToLayer` (producing 0/1 polynomials),
+    `coeffLayer` directly constructs `add_poly` with an arbitrary field element `coeff`
+    at position `(out, src, W_ZERO)`.  Pass-through positions have coefficient `1`.
+    All other positions have coefficient `0`.  `mul_poly` is identically `0`.
+
+    This enables encoding public inputs (e.g., `sig.s`, `z`, `sig.r`) into the
+    layer structure itself, so that the circuit topology depends on the ECDSA instance. -/
+noncomputable def coeffLayer (coeff : F) (out src : Fin 5 → Bool)
+    (passthroughs : List (Fin 5 → Bool)) : CircuitLayer F 5 where
+  add_poly := ⟨fun glr =>
+    if glr = concat3 out src W_ZERO then coeff
+    else if passthroughs.any (fun p => decide (glr = concat3 p p W_ZERO)) then 1
+    else 0⟩
+  mul_poly := ⟨fun _ => 0⟩
+
+-- ============================================================
+-- Section 8a: coeffLayer — helper to extract g component from concat3 equality
+-- ============================================================
+
+/-- If `concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂` then `g₁ = g₂`. -/
+private theorem concat3_g_eq {s : ℕ} {g₁ g₂ l₁ l₂ r₁ r₂ : Fin s → Bool}
+    (h : concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂) : g₁ = g₂ := by
+  funext j; have := congrFun h ⟨j.val, by omega⟩; simp [concat3, j.isLt] at this; exact this
+
+/-- If `concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂` then `l₁ = l₂`. -/
+private theorem concat3_l_eq {s : ℕ} {g₁ g₂ l₁ l₂ r₁ r₂ : Fin s → Bool}
+    (h : concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂) : l₁ = l₂ := by
+  funext j
+  have := congrFun h ⟨j.val + s, by omega⟩
+  simp [concat3, show ¬(j.val + s < s) from by omega, show j.val + s < 2 * s from by omega] at this
+  exact this
+
+/-- If `concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂` then `r₁ = r₂`. -/
+private theorem concat3_r_eq {s : ℕ} {g₁ g₂ l₁ l₂ r₁ r₂ : Fin s → Bool}
+    (h : concat3 g₁ l₁ r₁ = concat3 g₂ l₂ r₂) : r₁ = r₂ := by
+  funext j
+  have := congrFun h ⟨j.val + 2 * s, by omega⟩
+  simp [concat3, show ¬(j.val + 2 * s < s) from by omega,
+        show ¬(j.val + 2 * s < 2 * s) from by omega] at this
+  exact this
+
+/-- The main triple doesn't match at a different gate output position. -/
+private theorem coeffLayer_main_ne
+    (out src q : Fin 5 → Bool) (hq_ne_out : q ≠ out)
+    (l r : Fin 5 → Bool) :
+    concat3 q l r ≠ concat3 out src W_ZERO := by
+  intro heq; exact hq_ne_out (concat3_g_eq heq)
+
+/-- `concat3 g l r ≠ concat3 g src W_ZERO` when `l ≠ src` or `r ≠ W_ZERO`. -/
+private theorem concat3_ne_of_lr_ne
+    (g src : Fin 5 → Bool) (l r : Fin 5 → Bool)
+    (hlr : l ≠ src ∨ r ≠ W_ZERO) :
+    concat3 g l r ≠ concat3 g src W_ZERO := by
+  intro heq
+  rcases hlr with hl | hr
+  · exact hl (concat3_l_eq heq)
+  · exact hr (concat3_r_eq heq)
+
+-- ============================================================
+-- Section 8b: coeffLayer — passthrough matching helpers
+-- ============================================================
+
+/-- No passthrough matches at the output position. -/
+private theorem coeffLayer_no_pass_at_out
+    (out _src : Fin 5 → Bool)
+    (passthroughs : List (Fin 5 → Bool))
+    (hpass_ne_out : ∀ p ∈ passthroughs, p ≠ out)
+    (l r : Fin 5 → Bool) :
+    passthroughs.any (fun p => decide (concat3 out l r = concat3 p p W_ZERO)) = false := by
+  rw [List.any_eq_false]; intro p hp
+  simp only [decide_eq_true_eq]; intro heq
+  exact hpass_ne_out p hp (concat3_g_eq heq).symm
+
+/-- No passthrough matches at W_ZERO position. -/
+private theorem coeffLayer_no_pass_at_zero
+    (passthroughs : List (Fin 5 → Bool))
+    (hpass_ne_zero : ∀ p ∈ passthroughs, p ≠ W_ZERO)
+    (l r : Fin 5 → Bool) :
+    passthroughs.any (fun p => decide (concat3 W_ZERO l r = concat3 p p W_ZERO)) = false := by
+  rw [List.any_eq_false]; intro p hp
+  simp only [decide_eq_true_eq]; intro heq
+  exact hpass_ne_zero p hp (concat3_g_eq heq).symm
+
+/-- No passthrough matches at an uncovered position. -/
+private theorem coeffLayer_no_pass_at_uncovered
+    (q : Fin 5 → Bool) (passthroughs : List (Fin 5 → Bool))
+    (hq_not_pass : q ∉ passthroughs)
+    (l r : Fin 5 → Bool) :
+    passthroughs.any (fun p => decide (concat3 q l r = concat3 p p W_ZERO)) = false := by
+  rw [List.any_eq_false]; intro p hp
+  simp only [decide_eq_true_eq]; intro heq
+  exact hq_not_pass ((concat3_g_eq heq) ▸ hp)
+
+/-- A passthrough matches at its own position. -/
+private theorem coeffLayer_pass_self_match
+    (passthroughs : List (Fin 5 → Bool))
+    (p : Fin 5 → Bool) (hp : p ∈ passthroughs) :
+    passthroughs.any (fun p' => decide (concat3 p p W_ZERO = concat3 p' p' W_ZERO)) = true := by
+  rw [List.any_eq_true]; exact ⟨p, hp, by simp⟩
+
+/-- No passthrough matches when splitL/splitR don't match any passthrough's (p, W_ZERO). -/
+private theorem coeffLayer_no_pass_off_diag
+    (g : Fin 5 → Bool) (passthroughs : List (Fin 5 → Bool))
+    (_hnodup : passthroughs.Nodup)
+    (lr : Fin (2 * 5) → Bool)
+    (hlr : splitL lr ≠ g ∨ splitR lr ≠ W_ZERO)
+    (_hg_pass : g ∈ passthroughs) :
+    passthroughs.any (fun p' => decide (concat3 g (splitL lr) (splitR lr) = concat3 p' p' W_ZERO)) = false := by
+  rw [List.any_eq_false]; intro p' hp'
+  simp only [decide_eq_true_eq]; intro heq
+  rcases hlr with hl | hr
+  · exact hl ((concat3_g_eq heq).symm ▸ concat3_l_eq heq)
+  · exact hr (concat3_r_eq heq)
+
+-- ============================================================
+-- Section 8c: coeffLayer_iff — bidirectional semantics
+-- ============================================================
+
+/-- Bidirectional semantics for `coeffLayer`:
+    Layer consistency at all positions iff the coefficient equation holds at `out`,
+    pass-through equations hold, W_ZERO is zero, and all other positions are zero. -/
+theorem coeffLayer_iff
+    (coeff : F) (out src : Fin 5 → Bool)
+    (passthroughs : List (Fin 5 → Bool))
+    (V_curr V_next : LayerValues F 5)
+    (hout_ne_zero : out ≠ W_ZERO)
+    (hpass_ne_zero : ∀ p ∈ passthroughs, p ≠ W_ZERO)
+    (hpass_ne_out : ∀ p ∈ passthroughs, p ≠ out)
+    (hpass_nodup : passthroughs.Nodup) :
+    (∀ g, layerConsistent (coeffLayer F coeff out src passthroughs) V_curr V_next g) ↔
+    (V_curr.table out = coeff * (V_next.table src + V_next.table W_ZERO) ∧
+     (∀ p ∈ passthroughs, V_curr.table p = V_next.table p + V_next.table W_ZERO) ∧
+     V_curr.table W_ZERO = 0 ∧
+     (∀ q, q ≠ out → q ∉ passthroughs → q ≠ W_ZERO → V_curr.table q = 0)) := by
+  constructor
+  · -- Forward direction: extract equations from layerConsistent
+    intro hall
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · -- Coefficient equation at `out`
+      have hg := hall out
+      unfold layerConsistent coeffLayer at hg
+      simp only at hg; rw [hg]; clear hg
+      rw [Finset.sum_eq_single (buildLR src W_ZERO)]
+      · simp only [splitL_buildLR, splitR_buildLR]; simp
+      · intro lr _ hlr
+        have hlr' : splitL lr ≠ src ∨ splitR lr ≠ W_ZERO := by
+          by_contra h; push Not at h; exact hlr (buildLR_unique h.1 h.2)
+        have hne := concat3_ne_of_lr_ne out src (splitL lr) (splitR lr) hlr'
+        have hno_pass := coeffLayer_no_pass_at_out out src passthroughs hpass_ne_out (splitL lr) (splitR lr)
+        simp [hne, hno_pass]
+      · simp
+    · -- Pass-through equations
+      intro p hp
+      have hg := hall p
+      unfold layerConsistent coeffLayer at hg
+      simp only at hg; rw [hg]; clear hg
+      rw [Finset.sum_eq_single (buildLR p W_ZERO)]
+      · simp only [splitL_buildLR, splitR_buildLR]
+        have hne_main := coeffLayer_main_ne out src p (hpass_ne_out p hp) p W_ZERO
+        have hpass_match := coeffLayer_pass_self_match passthroughs p hp
+        simp [hne_main, hpass_match]
+      · intro lr _ hlr
+        have hlr' : splitL lr ≠ p ∨ splitR lr ≠ W_ZERO := by
+          by_contra h; push Not at h; exact hlr (buildLR_unique h.1 h.2)
+        have hne_main := coeffLayer_main_ne out src p (hpass_ne_out p hp) (splitL lr) (splitR lr)
+        have hno_pass := coeffLayer_no_pass_off_diag p passthroughs hpass_nodup lr hlr' hp
+        simp [hne_main, hno_pass]
+      · simp
+    · -- W_ZERO = 0
+      have hg := hall W_ZERO
+      unfold layerConsistent coeffLayer at hg
+      simp only at hg; rw [hg]; clear hg
+      apply Finset.sum_eq_zero; intro lr _
+      have hne_main := coeffLayer_main_ne out src W_ZERO hout_ne_zero.symm (splitL lr) (splitR lr)
+      have hno_pass := coeffLayer_no_pass_at_zero passthroughs hpass_ne_zero (splitL lr) (splitR lr)
+      simp [hne_main, hno_pass]
+    · -- All other positions are zero
+      intro q hq_ne_out hq_not_pass hq_ne_zero
+      have hg := hall q
+      unfold layerConsistent coeffLayer at hg
+      simp only at hg; rw [hg]; clear hg
+      apply Finset.sum_eq_zero; intro lr _
+      have hne_main := coeffLayer_main_ne out src q hq_ne_out (splitL lr) (splitR lr)
+      have hno_pass := coeffLayer_no_pass_at_uncovered q passthroughs hq_not_pass (splitL lr) (splitR lr)
+      simp [hne_main, hno_pass]
+  · -- Backward direction: construct layerConsistent from equations
+    intro ⟨hcoeff_eq, hpass_eq, hzero_eq, hcov⟩ g
+    unfold layerConsistent coeffLayer; simp only
+    by_cases hg_out : g = out
+    · -- g = out
+      subst hg_out; rw [hcoeff_eq]
+      rw [Finset.sum_eq_single (buildLR src W_ZERO)]
+      · simp only [splitL_buildLR, splitR_buildLR]; simp
+      · intro lr _ hlr
+        have hlr' : splitL lr ≠ src ∨ splitR lr ≠ W_ZERO := by
+          by_contra h; push Not at h; exact hlr (buildLR_unique h.1 h.2)
+        have hne := concat3_ne_of_lr_ne g src (splitL lr) (splitR lr) hlr'
+        have hno_pass := coeffLayer_no_pass_at_out g src passthroughs hpass_ne_out (splitL lr) (splitR lr)
+        simp [hne, hno_pass]
+      · simp
+    · by_cases hg_pass : g ∈ passthroughs
+      · -- g ∈ passthroughs
+        rw [hpass_eq g hg_pass]
+        rw [Finset.sum_eq_single (buildLR g W_ZERO)]
+        · simp only [splitL_buildLR, splitR_buildLR]
+          have hne_main := coeffLayer_main_ne out src g hg_out g W_ZERO
+          have hpass_match := coeffLayer_pass_self_match passthroughs g hg_pass
+          simp [hne_main, hpass_match]
+        · intro lr _ hlr
+          have hlr' : splitL lr ≠ g ∨ splitR lr ≠ W_ZERO := by
+            by_contra h; push Not at h; exact hlr (buildLR_unique h.1 h.2)
+          have hne_main := coeffLayer_main_ne out src g hg_out (splitL lr) (splitR lr)
+          have hno_pass := coeffLayer_no_pass_off_diag g passthroughs hpass_nodup lr hlr' hg_pass
+          simp [hne_main, hno_pass]
+        · simp
+      · by_cases hg_zero : g = W_ZERO
+        · -- g = W_ZERO
+          subst hg_zero; rw [hzero_eq]; symm
+          apply Finset.sum_eq_zero; intro lr _
+          have hne_main := coeffLayer_main_ne out src W_ZERO hg_out (splitL lr) (splitR lr)
+          have hno_pass := coeffLayer_no_pass_at_zero passthroughs hpass_ne_zero (splitL lr) (splitR lr)
+          simp [hne_main, hno_pass]
+        · -- uncovered
+          rw [hcov g hg_out hg_pass hg_zero]; symm
+          apply Finset.sum_eq_zero; intro lr _
+          have hne_main := coeffLayer_main_ne out src g hg_out (splitL lr) (splitR lr)
+          have hno_pass := coeffLayer_no_pass_at_uncovered g passthroughs hg_pass (splitL lr) (splitR lr)
+          simp [hne_main, hno_pass]
