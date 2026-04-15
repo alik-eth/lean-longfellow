@@ -36,6 +36,7 @@ import LeanLongfellow.Circuit.Composition
 import LeanLongfellow.Circuit.Probability
 import LeanLongfellow.Circuit.Gates
 import LeanLongfellow.Circuit.WireFormat
+import LeanLongfellow.Circuit.WireFormatSpec
 import LeanLongfellow.Circuit.Examples
 import LeanLongfellow.Circuit.ECArith
 import LeanLongfellow.Circuit.ECBridge
