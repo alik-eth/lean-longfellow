@@ -55,9 +55,11 @@ import LeanLongfellow.Escrow.Correctness
 import LeanLongfellow.Escrow.SHA256Bridge
 import LeanLongfellow.Merkle.Defs
 import LeanLongfellow.Merkle.Correctness
+import LeanLongfellow.Merkle.Concrete
 import LeanLongfellow.Poseidon.Defs
 import LeanLongfellow.Poseidon.Nullifier
 import LeanLongfellow.Poseidon.HolderBinding
+import LeanLongfellow.Poseidon.Concrete
 import LeanLongfellow.ZeroKnowledge.Defs
 import LeanLongfellow.ZeroKnowledge.HVZK
 import LeanLongfellow.EndToEnd
