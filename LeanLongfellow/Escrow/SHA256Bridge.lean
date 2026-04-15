@@ -23,8 +23,8 @@ case; multi-block chaining is future work.)
 
 This module provides:
 
-1. `SHA256Spec` — a specification-level SHA-256 hash function on escrow fields,
-   assumed collision-resistant.
+1. `SHA256Spec` — a specification-level SHA-256 hash function on escrow fields.
+   Collision resistance is an explicit hypothesis on theorems that need it.
 2. An instance `CRHash (EscrowFields F) F` derived from `SHA256Spec`, so all
    escrow theorems (`escrow_integrity`, `escrow_binding`,
    `escrow_field_sensitivity`) apply to the SHA-256 instantiation.
@@ -42,15 +42,13 @@ set_option autoImplicit false
     Maps 8 field elements (the escrow credential fields) to a single
     digest field element.
 
-    Collision resistance is modeled as injectivity — distinct escrow
-    field tuples always produce distinct digests. This is the standard
-    cryptographic assumption on SHA-256 in the random-oracle / ideal-hash
-    model used throughout zk-SNARK security proofs. -/
+    Collision resistance is modeled as an explicit hypothesis on theorems
+    that need it, rather than a class field, because `Function.Injective`
+    is unsatisfiable for hash functions over finite types when the domain
+    is larger than the codomain. -/
 class SHA256Spec (F : Type*) where
   /-- Hash 8 escrow field values to a digest. -/
   sha256 : EscrowFields F → F
-  /-- SHA-256 is collision resistant (injective). -/
-  injective : Function.Injective sha256
 
 -- ============================================================
 -- Section 2: Escrow digest via SHA-256
@@ -76,12 +74,24 @@ noncomputable instance escrowCRHash [SHA256Spec F] :
 -- ============================================================
 
 /-- With the SHA-256 bridge, collision resistance of the escrow digest
-    follows directly from `SHA256Spec.injective`. -/
+    follows from an explicit `Function.Injective` hypothesis. -/
 theorem escrow_sha256_binding [SHA256Spec F]
     (f1 f2 : EscrowFields F)
+    (hcr : Function.Injective (SHA256Spec.sha256 (F := F)))
     (h : escrowSHA256Digest f1 = escrowSHA256Digest f2) :
     f1 = f2 :=
-  SHA256Spec.injective h
+  hcr h
+
+open Classical in
+/-- Collision-extracting variant: either binding holds or SHA-256 has a collision.
+    Does not require the `Function.Injective` hypothesis. -/
+theorem escrow_sha256_binding_or_collision [SHA256Spec F]
+    (f1 f2 : EscrowFields F)
+    (h : escrowSHA256Digest f1 = escrowSHA256Digest f2) :
+    f1 = f2 ∨ HashCollision (SHA256Spec.sha256 (F := F)) := by
+  by_cases heq : f1 = f2
+  · left; exact heq
+  · right; exact ⟨f1, f2, heq, h⟩
 
 /-- The SHA-256 escrow digest agrees with the abstract `escrowDigest`
     when `CRHash` is instantiated via `escrowCRHash`. -/
@@ -141,12 +151,10 @@ class SHA256CircuitSound (F : Type*) [Field F] [SHA256Constants F]
       (∀ i, isWord32 (input i)) →
       ∀ i : Fin 8, word32Val (out1 i) = word32Val (out2 i)
 
-/-- When circuit soundness is available, the `CRHash` instance is also
-    available (inherited from the `SHA256Spec` superclass). -/
-theorem sha256_circuit_implies_crhash [Field F] [SHA256Constants F]
-    [SHA256CircuitSound F] :
-    Function.Injective (SHA256Spec.sha256 (F := F)) :=
-  SHA256Spec.injective
+-- `sha256_circuit_implies_crhash` removed: with `injective` no longer
+-- a field of `SHA256Spec`, CR must be an explicit hypothesis on any
+-- theorem that needs it (same pattern as `CRHash`, `MerkleHash`,
+-- `PoseidonHash`).
 
 -- ============================================================
 -- Section 5: Multi-block structure
