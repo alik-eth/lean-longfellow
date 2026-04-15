@@ -53,4 +53,6 @@ import LeanLongfellow.Merkle.Correctness
 import LeanLongfellow.Poseidon.Defs
 import LeanLongfellow.Poseidon.Nullifier
 import LeanLongfellow.Poseidon.HolderBinding
+import LeanLongfellow.ZeroKnowledge.Defs
+import LeanLongfellow.ZeroKnowledge.HVZK
 import LeanLongfellow.EndToEnd
