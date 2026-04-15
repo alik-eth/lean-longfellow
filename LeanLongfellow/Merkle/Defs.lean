@@ -1,5 +1,6 @@
 import Mathlib.Logic.Function.Basic
 import Mathlib.Data.Fin.Basic
+import LeanLongfellow.Poseidon.Defs
 
 /-! # Abstract Merkle Tree
 
@@ -8,7 +9,7 @@ hash function. The commitment is the root hash. Individual leaves can be
 opened with authentication paths (sibling hashes along the path to the root).
 
 This module provides:
-- `MerkleHash`: an abstract collision-resistant binary hash
+- `MerkleHash`: an abstract binary hash (collision resistance is an explicit hypothesis)
 - `MerkleTree`: a complete binary tree of depth `d` with `2^d` leaves
 - `AuthPath`: an authentication path from leaf to root
 - `verifyPath`: verification of a leaf against a root via its path
@@ -16,16 +17,25 @@ This module provides:
 -/
 
 -- ============================================================
--- Section 1: Abstract collision-resistant binary hash
+-- Section 1: Abstract binary hash
 -- ============================================================
 
 /-- Abstract hash function for Merkle tree nodes.
     Takes two children and produces a parent digest.
-    Collision resistance is captured by injectivity on pairs. -/
+    Collision resistance is modeled as an explicit hypothesis on theorems
+    that need it, rather than a class field, because `Function.Injective`
+    is unsatisfiable for hash functions over finite types. -/
 class MerkleHash (D : Type*) where
   hash2 : D → D → D
-  /-- Collision resistance: `hash2` is injective as a function of pairs. -/
-  hash2_injective : Function.Injective (fun p : D × D => hash2 p.1 p.2)
+
+-- ============================================================
+-- Section 1b: Collision type
+-- ============================================================
+
+/-- A collision for a `MerkleHash` instance: two distinct input pairs
+    with the same hash output. -/
+def MerkleHashCollision (D : Type*) [MerkleHash D] : Prop :=
+  HashCollision (fun p : D × D => MerkleHash.hash2 p.1 p.2)
 
 -- ============================================================
 -- Section 2: Merkle tree type

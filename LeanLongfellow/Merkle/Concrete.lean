@@ -5,22 +5,19 @@ import LeanLongfellow.Ligero.MerkleCommitment
 /-! # Concrete Merkle and Column Hash from Poseidon Sponge
 
 Instantiates `MerkleHash` and `ColumnHash` using `PoseidonSponge` as
-the underlying hash primitive. Collision resistance appears as an
-explicit hypothesis in the constructors, matching the sponge model.
+the underlying hash primitive.
 
 ## Main definitions
 
-- `MerkleHash.ofPoseidon` -- binary Merkle hash from `PoseidonSponge F 2` + CR
-- `ColumnHash.ofPoseidon` -- column hash from `PoseidonSponge F n` + CR
+- `MerkleHash.ofPoseidon` -- binary Merkle hash from `PoseidonSponge F 2`
+- `ColumnHash.ofPoseidon` -- column hash from `PoseidonSponge F n`
 
 ## Design note
 
-`MerkleHash.hash2_injective` and `ColumnHash.hashColumn_injective` are
-unconditional fields (no hypothesis parameter). To fill them we need an
-actual injectivity proof, which we obtain from the CR hypothesis passed
-to the constructor. The resulting instances are therefore `noncomputable`
-(the hash function itself may be noncomputable) and carry the CR
-assumption inside the instance -- the same pattern used by `PoseidonHash`.
+The `MerkleHash` and `ColumnHash` classes now only carry the hash
+function, not an injectivity proof. Collision resistance is supplied
+as an explicit hypothesis to theorems that need it. The constructors
+below simply wire the Poseidon sponge into the class fields.
 -/
 
 -- ============================================================
@@ -33,53 +30,41 @@ variable {F : Type*} {NROW : ℕ}
 private def mkPair (a b : F) : Fin 2 → F :=
   fun i => match i with | ⟨0, _⟩ => a | ⟨1, _⟩ => b
 
-/-- Construct a `MerkleHash` instance from a `PoseidonSponge` with
-    arity 2 and an explicit collision-resistance hypothesis.
+/-- Construct a `MerkleHash` instance from a `PoseidonSponge` with arity 2.
 
     `hash2 a b = PoseidonSponge.hash (mkPair a b)` -/
 @[reducible]
-noncomputable def MerkleHash.ofPoseidon [PoseidonSponge F 2]
-    (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := 2))) :
+noncomputable def MerkleHash.ofPoseidon [PoseidonSponge F 2] :
     MerkleHash F where
   hash2 a b := PoseidonSponge.hash (mkPair a b)
-  hash2_injective := by
-    intro ⟨a1, b1⟩ ⟨a2, b2⟩ h
-    have h_input := hcr h
-    have ha : a1 = a2 := congr_fun h_input ⟨0, by omega⟩
-    have hb : b1 = b2 := congr_fun h_input ⟨1, by omega⟩
-    exact Prod.ext ha hb
 
 -- ============================================================
 -- Section 2: ColumnHash from PoseidonSponge
 -- ============================================================
 
 /-- Construct a `ColumnHash` instance (with digest type `F`) from a
-    `PoseidonSponge` with arity `NROW` and an explicit CR hypothesis.
+    `PoseidonSponge` with arity `NROW`.
 
     `hashColumn col = PoseidonSponge.hash col` -/
 @[reducible]
-noncomputable def ColumnHash.ofPoseidon [PoseidonSponge F NROW]
-    (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := NROW))) :
+noncomputable def ColumnHash.ofPoseidon [PoseidonSponge F NROW] :
     ColumnHash F F NROW where
   hashColumn := PoseidonSponge.hash
-  hashColumn_injective := hcr
 
 -- ============================================================
 -- Section 3: Consistency between MerkleHash and PoseidonHash
 -- ============================================================
 
-/-- When we already have a `PoseidonHash F 2` instance and a CR hypothesis,
+/-- When we already have a `PoseidonHash F 2` instance,
     we get a `MerkleHash` directly. -/
 @[reducible]
-noncomputable def MerkleHash.ofPoseidonHash [PoseidonHash F 2]
-    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 2))) :
+noncomputable def MerkleHash.ofPoseidonHash [PoseidonHash F 2] :
     MerkleHash F :=
-  MerkleHash.ofPoseidon hcr
+  MerkleHash.ofPoseidon
 
-/-- When we already have a `PoseidonHash F NROW` instance and a CR hypothesis,
+/-- When we already have a `PoseidonHash F NROW` instance,
     we get a `ColumnHash` directly. -/
 @[reducible]
-noncomputable def ColumnHash.ofPoseidonHash [PoseidonHash F NROW]
-    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := NROW))) :
+noncomputable def ColumnHash.ofPoseidonHash [PoseidonHash F NROW] :
     ColumnHash F F NROW :=
-  ColumnHash.ofPoseidon hcr
+  ColumnHash.ofPoseidon

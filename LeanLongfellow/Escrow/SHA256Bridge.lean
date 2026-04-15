@@ -17,7 +17,7 @@ requiring 5 SHA-256 blocks. The current formalization covers the single-block
 case; multi-block chaining is future work.)
 
 - **Abstract side** (`Escrow/Defs.lean`): `CRHash (EscrowFields F) F` models
-  collision-resistant hashing as an injective function.
+  hashing. Collision resistance is an explicit hypothesis on theorems.
 - **Concrete side** (`Circuit/SHA256.lean`): `sha256SingleBlock` constrains a
   single 512-bit block of SHA-256 compression.
 
@@ -70,7 +70,6 @@ noncomputable def escrowSHA256Digest [SHA256Spec F]
 noncomputable instance escrowCRHash [SHA256Spec F] :
     CRHash (EscrowFields F) F where
   hash := SHA256Spec.sha256
-  collision_resistant := SHA256Spec.injective
 
 -- ============================================================
 -- Section 3: Escrow properties under SHA-256

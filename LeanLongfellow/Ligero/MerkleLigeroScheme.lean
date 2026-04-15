@@ -17,7 +17,7 @@ via a Merkle tree over hashed tableau columns.
 This file bridges that gap.  The commitment is a column-hash tuple — the
 data that would sit at the leaves of a Merkle tree in a full deployment.
 The prover cannot change witness data after committing because
-`ColumnHash.hashColumn_injective` pins each column, and
+collision resistance of `ColumnHash.hashColumn` pins each column, and
 `tableau_full_binding` lifts this to the entire tableau.
 
 ## Architecture
@@ -107,6 +107,8 @@ omit [MerkleHash D] in
 /-- **Merkle-committed binding**: if `merkleVerify` accepts on
     `commit w`, the witness satisfies all constraints.
 
+    Requires column hash collision resistance as an explicit hypothesis.
+
     Proof outline:
     1. Phase 1 gives: `∀ j, hashColumn (embed π.witness).column j
        = hashColumn (embed w).column j`.
@@ -118,6 +120,7 @@ omit [MerkleHash D] in
     7. By `threeTest_binding`, `satisfiesAll w lcs qcs`. -/
 theorem merkle_scheme_binding {params : LigeroParams} {m n q : ℕ}
     [ColumnHash D F params.NROW]
+    (hcr_col : Function.Injective (ColumnHash.hashColumn (D := D) (F := F) (NROW := params.NROW)))
     (embed : (Fin n → F) → Tableau F params)
     (embed_injective : Function.Injective embed)
     (w : Fin n → F)
@@ -133,7 +136,7 @@ theorem merkle_scheme_binding {params : LigeroParams} {m n q : ℕ}
   have h_cols : ∀ j : Fin params.NCOL,
       (embed proof.witness).column j = (embed w).column j := by
     intro j
-    exact ColumnHash.hashColumn_injective (h_commit j)
+    exact hcr_col (h_commit j)
   -- Step 3: columns agree → tableaux agree
   have h_tab : embed proof.witness = embed w :=
     Tableau.ext_column (embed proof.witness) (embed w) h_cols
@@ -144,6 +147,28 @@ theorem merkle_scheme_binding {params : LigeroParams} {m n q : ℕ}
   rw [h_wit] at h_three
   exact threeTest_binding w lcs qcs proof.innerProof h_three
 
+open Classical in
+omit [MerkleHash D] in
+/-- **Merkle-committed binding (collision-extracting):**
+    Same conclusion as `merkle_scheme_binding`, OR a column hash collision. -/
+theorem merkle_scheme_binding_or_collision {params : LigeroParams} {m n q : ℕ}
+    [ColumnHash D F params.NROW]
+    (embed : (Fin n → F) → Tableau F params)
+    (embed_injective : Function.Injective embed)
+    (w : Fin n → F)
+    (lcs : LinearConstraints F m n)
+    (qcs : Fin q → QuadConstraint n)
+    (proof : MerkleLigeroProof F params m n q)
+    (h : merkleVerify (D := D) embed
+           (fun j => ColumnHash.hashColumn ((embed w).column j))
+           lcs qcs proof) :
+    satisfiesAll w lcs qcs ∨ ColumnHashCollision D F params.NROW := by
+  by_cases hinj : Function.Injective (ColumnHash.hashColumn (D := D) (F := F) (NROW := params.NROW))
+  · left; exact merkle_scheme_binding hinj embed embed_injective w lcs qcs proof h
+  · right
+    rw [injective_iff_no_collision] at hinj
+    exact not_not.mp hinj
+
 -- ============================================================
 -- Section 4: No equivocation — Merkle pins the tableau
 -- ============================================================
@@ -152,11 +177,14 @@ omit [MerkleHash D] in
 /-- **Merkle no-equivocation**: two proofs that both pass `merkleVerify`
     against the same commitment must carry the same witness.
 
+    Requires column hash collision resistance as an explicit hypothesis.
+
     This is the property that `commit := id` trivially has but does not
     *enforce*: once the commitment is fixed, the witness is determined.
     Here it follows from hash injectivity + embedding injectivity. -/
 theorem merkle_no_equivocation {params : LigeroParams} {m n q : ℕ}
     [ColumnHash D F params.NROW]
+    (hcr_col : Function.Injective (ColumnHash.hashColumn (D := D) (F := F) (NROW := params.NROW)))
     (embed : (Fin n → F) → Tableau F params)
     (embed_injective : Function.Injective embed)
     (commitment : Fin params.NCOL → D)
@@ -169,7 +197,7 @@ theorem merkle_no_equivocation {params : LigeroParams} {m n q : ℕ}
   have h_cols : ∀ j, (embed proof1.witness).column j =
       (embed proof2.witness).column j := by
     intro j
-    exact ColumnHash.hashColumn_injective ((h1.1 j).trans (h2.1 j).symm)
+    exact hcr_col ((h1.1 j).trans (h2.1 j).symm)
   have h_tab := Tableau.ext_column _ _ h_cols
   exact embed_injective h_tab
 
@@ -214,18 +242,22 @@ theorem merkle_scheme_completeness {params : LigeroParams} {m n q : ℕ}
     witness.  The prover cannot equivocate on any column after committing
     (`merkle_no_equivocation`).
 
+    Requires column hash collision resistance as an explicit hypothesis.
+
     Parameters:
     - `D` — digest type (e.g., SHA-256 output, Poseidon hash)
     - `F` — field type
     - `params` — Ligero geometry (NROW, NCOL, BLOCK, NREQ)
     - `embed` — injective witness-to-tableau embedding
-    - `embed_injective` — proof that `embed` is injective -/
+    - `embed_injective` — proof that `embed` is injective
+    - `hcr_col` — collision resistance of column hash -/
 @[reducible]
 noncomputable def merkleLigeroScheme
     (D : Type) [MerkleHash D]
     (F : Type) [Field F]
     (params : LigeroParams) (n m q : ℕ)
     [ColumnHash D F params.NROW]
+    (hcr_col : Function.Injective (ColumnHash.hashColumn (D := D) (F := F) (NROW := params.NROW)))
     (embed : (Fin n → F) → Tableau F params)
     (embed_injective : Function.Injective embed) :
     LigeroScheme F n m q where
@@ -235,4 +267,4 @@ noncomputable def merkleLigeroScheme
   verify := fun c lcs qcs proof =>
     merkleVerify (D := D) embed c lcs qcs proof
   binding := fun w lcs qcs proof h =>
-    merkle_scheme_binding embed embed_injective w lcs qcs proof h
+    merkle_scheme_binding hcr_col embed embed_injective w lcs qcs proof h

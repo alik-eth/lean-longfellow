@@ -1,4 +1,5 @@
 import Mathlib.Logic.Function.Basic
+import LeanLongfellow.Poseidon.Defs
 
 /-! # Escrow Digest Commitment — Definitions
 
@@ -7,8 +8,10 @@ The escrow digest is a SHA-256 hash of 8 credential fields (each 32 bytes).
 The circuit proves in zero knowledge that the digest matches the hash of the
 fields, without revealing them.
 
-We model SHA-256 abstractly as a collision-resistant hash function (injective).
-The internal block structure is out of scope.
+We model SHA-256 abstractly as a hash function. Collision resistance is
+modeled as an explicit hypothesis on theorems that need it, rather than a
+class field, because `Function.Injective` is unsatisfiable for hash functions
+over finite types when the domain is larger than the codomain.
 -/
 
 -- ============================================================
@@ -16,11 +19,20 @@ The internal block structure is out of scope.
 -- ============================================================
 
 /-- Abstract hash function modelling SHA-256.
-    Collision resistance is captured by injectivity. -/
+    Collision resistance is modeled as an explicit hypothesis on theorems
+    that need it, rather than a class field, because `Function.Injective`
+    is unsatisfiable for hash functions over finite types when the domain
+    is larger than the codomain. -/
 class CRHash (α β : Type*) where
   hash : α → β
-  /-- Collision resistance: distinct inputs produce distinct outputs. -/
-  collision_resistant : Function.Injective hash
+
+-- ============================================================
+-- Section 1b: Collision type
+-- ============================================================
+
+/-- A collision for a `CRHash` instance: two distinct inputs with the same hash. -/
+def CRHashCollision (α β : Type*) [CRHash α β] : Prop :=
+  HashCollision (CRHash.hash (α := α) (β := β))
 
 -- ============================================================
 -- Section 2: Escrow field types

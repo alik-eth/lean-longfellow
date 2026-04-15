@@ -9,24 +9,32 @@ Proves the key security properties of the Merkle tree commitment scheme:
    prover commits to a root, they cannot equivocate on any leaf.
 2. **Correctness**: the authentication path extracted from a tree verifies
    against the tree's root.
+
+Each binding theorem has two variants:
+- One taking `Function.Injective` as an explicit hypothesis.
+- One concluding `result ∨ MerkleHashCollision` (collision-extracting).
 -/
 
 -- ============================================================
 -- Section 1: Auxiliary lemma for hash2 injectivity
 -- ============================================================
 
-/-- `hash2` is injective in its first argument (left cancellation). -/
+/-- `hash2` is injective in its first argument (left cancellation).
+    Requires injectivity of the pair hash as an explicit hypothesis. -/
 theorem MerkleHash.hash2_left_cancel {D : Type*} [MerkleHash D]
+    (hcr : Function.Injective (fun p : D × D => MerkleHash.hash2 p.1 p.2))
     {a b c : D} (h : MerkleHash.hash2 a c = MerkleHash.hash2 b c) :
     a = b := by
-  have : (a, c) = (b, c) := MerkleHash.hash2_injective h
+  have : (a, c) = (b, c) := hcr h
   exact congrArg Prod.fst this
 
-/-- `hash2` is injective in its second argument (right cancellation). -/
+/-- `hash2` is injective in its second argument (right cancellation).
+    Requires injectivity of the pair hash as an explicit hypothesis. -/
 theorem MerkleHash.hash2_right_cancel {D : Type*} [MerkleHash D]
+    (hcr : Function.Injective (fun p : D × D => MerkleHash.hash2 p.1 p.2))
     {a b c : D} (h : MerkleHash.hash2 c a = MerkleHash.hash2 c b) :
     a = b := by
-  have : (c, a) = (c, b) := MerkleHash.hash2_injective h
+  have : (c, a) = (c, b) := hcr h
   exact congrArg Prod.snd this
 
 -- ============================================================
@@ -54,6 +62,8 @@ theorem verifyPath_succ {D : Type*} [MerkleHash D] {n : ℕ}
     to a Merkle root, they cannot open any leaf position to two different
     values using the same authentication path.
 
+    Requires collision resistance (injectivity) as an explicit hypothesis.
+
     Proof by induction on depth `d`:
     - Base case (`d = 0`): `verifyPath` is the identity, so the claim
       is immediate.
@@ -62,6 +72,7 @@ theorem verifyPath_succ {D : Type*} [MerkleHash D] {n : ℕ}
       (left or right cancellation) forces the original leaves to be
       equal. -/
 theorem merkle_binding {D : Type*} [MerkleHash D] {d : ℕ}
+    (hcr : Function.Injective (fun p : D × D => MerkleHash.hash2 p.1 p.2))
     (leaf1 leaf2 : D) (path : AuthPath D d)
     (h : verifyPath leaf1 path = verifyPath leaf2 path) :
     leaf1 = leaf2 := by
@@ -79,24 +90,51 @@ theorem merkle_binding {D : Type*} [MerkleHash D] {d : ℕ}
     by_cases hb : (path ⟨0, Nat.zero_lt_succ n⟩).2 = true
     · -- is_left = true: hash2 leaf sibling
       simp only [hb, ite_true] at h_parent
-      exact MerkleHash.hash2_left_cancel h_parent
+      exact MerkleHash.hash2_left_cancel hcr h_parent
     · -- is_left = false: hash2 sibling leaf
       have hb' : (path ⟨0, Nat.zero_lt_succ n⟩).2 = false := by
         exact Bool.eq_false_iff.mpr hb
       simp only [hb'] at h_parent
-      exact MerkleHash.hash2_right_cancel h_parent
+      exact MerkleHash.hash2_right_cancel hcr h_parent
+
+open Classical in
+/-- **Binding (collision-extracting)**: same path, same resulting root
+    implies same leaf, OR a `MerkleHash` collision exists.
+    Does not require the `Function.Injective` hypothesis. -/
+theorem merkle_binding_or_collision {D : Type*} [MerkleHash D] {d : ℕ}
+    (leaf1 leaf2 : D) (path : AuthPath D d)
+    (h : verifyPath leaf1 path = verifyPath leaf2 path) :
+    leaf1 = leaf2 ∨ MerkleHashCollision D := by
+  by_cases hinj : Function.Injective (fun p : D × D => MerkleHash.hash2 p.1 p.2)
+  · left; exact merkle_binding hinj leaf1 leaf2 path h
+  · right
+    rw [injective_iff_no_collision] at hinj
+    exact not_not.mp hinj
 
 /-- **Binding (with explicit root)**: if two leaf values both verify against
     the same root using the same authentication path, then the leaves
-    must be equal. -/
+    must be equal. Requires collision resistance as an explicit hypothesis. -/
 theorem merkle_binding_root {D : Type*} [MerkleHash D] {d : ℕ}
+    (hcr : Function.Injective (fun p : D × D => MerkleHash.hash2 p.1 p.2))
     (root : D) (leaf1 leaf2 : D) (path1 path2 : AuthPath D d)
     (h1 : verifyPath leaf1 path1 = root)
     (h2 : verifyPath leaf2 path2 = root)
     (h_same_path : path1 = path2) :
     leaf1 = leaf2 := by
   subst h_same_path
-  exact merkle_binding leaf1 leaf2 path1 (h1.trans h2.symm)
+  exact merkle_binding hcr leaf1 leaf2 path1 (h1.trans h2.symm)
+
+open Classical in
+/-- **Binding with explicit root (collision-extracting):**
+    Same conclusion as `merkle_binding_root`, OR a `MerkleHash` collision. -/
+theorem merkle_binding_root_or_collision {D : Type*} [MerkleHash D] {d : ℕ}
+    (root : D) (leaf1 leaf2 : D) (path1 path2 : AuthPath D d)
+    (h1 : verifyPath leaf1 path1 = root)
+    (h2 : verifyPath leaf2 path2 = root)
+    (h_same_path : path1 = path2) :
+    leaf1 = leaf2 ∨ MerkleHashCollision D := by
+  subst h_same_path
+  exact merkle_binding_or_collision leaf1 leaf2 path1 (h1.trans h2.symm)
 
 -- ============================================================
 -- Section 4: Correctness helper lemmas

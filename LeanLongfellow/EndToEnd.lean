@@ -206,13 +206,15 @@ theorem zkEidas_holder_binding [PoseidonHash F 1]
 omit [Field F] [DecidableEq F] in
 /-- **Escrow integrity (re-export):**
     If the circuit commitment is correct and the authority verification
-    passes, the decrypted fields match the original fields. -/
+    passes, the decrypted fields match the original fields.
+    Requires collision resistance (injectivity) as an explicit hypothesis. -/
 theorem zkEidas_escrow_integrity [CRHash (EscrowFields F) F]
     (original decrypted : EscrowFields F) (digest : F)
+    (hcr : Function.Injective (CRHash.hash (α := EscrowFields F) (β := F)))
     (h_circuit : escrowCommitmentCorrect original digest)
     (h_authority : escrowAuthorityVerifies decrypted digest) :
     original = decrypted :=
-  escrow_integrity original decrypted digest h_circuit h_authority
+  escrow_integrity original decrypted digest hcr h_circuit h_authority
 
 -- ============================================================
 -- Section 8: Fiat-Shamir probability bound (re-export)
@@ -274,6 +276,7 @@ theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
     -- Collision resistance hypotheses
     (hcr3 : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (hcr1 : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
+    (hcr_escrow : Function.Injective (CRHash.hash (α := EscrowFields F) (β := F)))
     -- Predicate setup (with commitment binding — claim' is ANY value
     -- producing the same commitment, not the original claim)
     (spec : PredicateSpec F)
@@ -301,7 +304,8 @@ theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
   ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root,
    zkEidas_predicate_soundness spec claim sd_hash msg_hash claim' sd_hash'
      msg_hash' commitment hcr3 h_comm h_comm' h_pred,
-   zkEidas_escrow_integrity original decrypted digest h_escrow_commit h_escrow_verify,
+   zkEidas_escrow_integrity original decrypted digest hcr_escrow
+     h_escrow_commit h_escrow_verify,
    zkEidas_nullifier_binding cred1 cred2 contract1 contract2 salt1 salt2 hcr3 h_null,
    zkEidas_holder_binding attr1 attr2 hcr1 h_holder⟩
 
@@ -313,13 +317,14 @@ open Classical in
 /-- **Full zk-eIDAS security (collision-extracting):**
 
     The same five-property composition as `zkEidas_full_soundness`, but
-    without assuming Poseidon injectivity (`Function.Injective`).
+    without assuming any hash injectivity (`Function.Injective`).
     Instead, the conclusion is a disjunction: either all five security
-    properties hold, OR a concrete Poseidon collision can be extracted.
+    properties hold, OR a concrete collision can be extracted for one of
+    the hash functions (Poseidon-3, Poseidon-1, or CRHash/escrow).
 
     This formulation is strictly stronger because the collision-resistance
-    hypotheses `hcr3` / `hcr1` are replaced by constructive case splits
-    that produce a witness when the properties fail. -/
+    hypotheses are replaced by constructive case splits that produce a
+    witness when the properties fail. -/
 theorem zkEidas_full_soundness_or_collision [EllipticCurve F] [PoseidonHash F 3]
     [PoseidonHash F 1] [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
@@ -347,24 +352,26 @@ theorem zkEidas_full_soundness_or_collision [EllipticCurve F] [PoseidonHash F 3]
     -- Holder binding
     (attr1 attr2 : F)
     (h_holder : holderBindingHash attr1 = holderBindingHash attr2) :
-    -- CONCLUSION: all five properties hold, OR a Poseidon collision exists
+    -- CONCLUSION: all five properties hold, OR a collision exists
     (ecdsaVerify z Q sig ∧
      predicateHolds spec claim' ∧
      original = decrypted ∧
      (cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2) ∧
      attr1 = attr2) ∨
-    PoseidonCollision F 3 ∨ PoseidonCollision F 1 := by
+    PoseidonCollision F 3 ∨ PoseidonCollision F 1 ∨
+    CRHashCollision (EscrowFields F) F := by
   have h_ecdsa := zkEidas_no_root_implies_valid proof hs haccept hno_root
-  have h_escrow := zkEidas_escrow_integrity original decrypted digest
-    h_escrow_commit h_escrow_verify
-  rcases predicateCommitment_binding_or_collision claim claim' sd_hash sd_hash'
-    msg_hash msg_hash' (h_comm.trans h_comm'.symm) with h_pred_bind | hcol3
-  · rcases nullifier_binding_or_collision cred1 cred2 contract1 contract2
-      salt1 salt2 h_null with h_null_bind | hcol3
-    · rcases holderBinding_binding_or_collision attr1 attr2 h_holder
-        with h_holder_bind | hcol1
-      · left
-        exact ⟨h_ecdsa, by rwa [← h_pred_bind.1], h_escrow, h_null_bind, h_holder_bind⟩
-      · right; right; exact hcol1
+  rcases escrow_integrity_or_collision original decrypted digest
+    h_escrow_commit h_escrow_verify with h_escrow | hcol_escrow
+  · rcases predicateCommitment_binding_or_collision claim claim' sd_hash sd_hash'
+      msg_hash msg_hash' (h_comm.trans h_comm'.symm) with h_pred_bind | hcol3
+    · rcases nullifier_binding_or_collision cred1 cred2 contract1 contract2
+        salt1 salt2 h_null with h_null_bind | hcol3
+      · rcases holderBinding_binding_or_collision attr1 attr2 h_holder
+          with h_holder_bind | hcol1
+        · left
+          exact ⟨h_ecdsa, by rwa [← h_pred_bind.1], h_escrow, h_null_bind, h_holder_bind⟩
+        · right; right; left; exact hcol1
+      · right; left; exact hcol3
     · right; left; exact hcol3
-  · right; left; exact hcol3
+  · right; right; right; exact hcol_escrow
