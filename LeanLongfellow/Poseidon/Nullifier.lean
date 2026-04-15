@@ -75,3 +75,45 @@ theorem nullifier_replay_detection [PoseidonHash F 3]
     salt1 = salt2 := by
   have ⟨_, _, h_salt⟩ := nullifier_binding cred cred contract contract salt1 salt2 hcr h
   exact h_salt
+
+-- ============================================================
+-- Section 6: Collision-extracting reductions
+-- ============================================================
+
+open Classical in
+/-- **Nullifier binding (collision-extracting):**
+    Same nullifier implies same `(credential, contract, salt)`,
+    OR a Poseidon collision exists.  Unlike `nullifier_binding`, this
+    does not require the `Function.Injective` hypothesis, making it
+    non-vacuous for finite fields. -/
+theorem nullifier_binding_or_collision [PoseidonHash F 3]
+    (cred1 cred2 contract1 contract2 salt1 salt2 : F)
+    (h : nullifier cred1 contract1 salt1 = nullifier cred2 contract2 salt2) :
+    (cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2) ∨ PoseidonCollision F 3 := by
+  exact predicateCommitment_binding_or_collision cred1 cred2 contract1 contract2 salt1 salt2 h
+
+open Classical in
+/-- **Contract scoping (collision-extracting):**
+    Different contracts with the same nullifier imply a Poseidon collision. -/
+theorem nullifier_contract_scoped_or_collision [PoseidonHash F 3]
+    (cred contract1 contract2 salt : F)
+    (h_diff : contract1 ≠ contract2)
+    (h : nullifier cred contract1 salt = nullifier cred contract2 salt) :
+    PoseidonCollision F 3 := by
+  rcases nullifier_binding_or_collision cred cred contract1 contract2 salt salt h with
+    ⟨_, h_contract, _⟩ | hcol
+  · exact absurd h_contract h_diff
+  · exact hcol
+
+open Classical in
+/-- **Replay detection (collision-extracting):**
+    Same credential and contract with equal nullifier implies same salt,
+    OR a Poseidon collision exists. -/
+theorem nullifier_replay_detection_or_collision [PoseidonHash F 3]
+    (cred contract salt1 salt2 : F)
+    (h : nullifier cred contract salt1 = nullifier cred contract salt2) :
+    salt1 = salt2 ∨ PoseidonCollision F 3 := by
+  rcases nullifier_binding_or_collision cred cred contract contract salt1 salt2 h with
+    ⟨_, _, h_salt⟩ | hcol
+  · exact Or.inl h_salt
+  · exact Or.inr hcol

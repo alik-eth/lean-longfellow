@@ -77,3 +77,37 @@ theorem predicateCommitment_binding [PoseidonHash F 3]
   unfold predicateCommitment at h
   rw [poseidon3_eq, poseidon3_eq] at h
   exact fin3_ext (hcr h)
+
+-- ============================================================
+-- Section 5: Collision-extracting reductions
+-- ============================================================
+
+/-- A collision for a function: two distinct inputs with the same output. -/
+def HashCollision {α β : Type*} (f : α → β) : Prop :=
+  ∃ x₁ x₂ : α, x₁ ≠ x₂ ∧ f x₁ = f x₂
+
+/-- A collision for Poseidon hash with arity n. -/
+def PoseidonCollision (F : Type*) (n : ℕ) [PoseidonHash F n] : Prop :=
+  HashCollision (PoseidonHash.hash (F := F) (n := n))
+
+/-- Injectivity is equivalent to absence of collisions. -/
+theorem injective_iff_no_collision {α β : Type*} (f : α → β) :
+    Function.Injective f ↔ ¬ HashCollision f := by
+  constructor
+  · intro hinj ⟨x₁, x₂, hne, heq⟩; exact hne (hinj heq)
+  · intro hno x₁ x₂ heq; by_contra hne; exact hno ⟨x₁, x₂, hne, heq⟩
+
+open Classical in
+/-- **Predicate commitment binding (collision-extracting):**
+    Same commitment implies same inputs, OR a Poseidon collision exists.
+    Unlike `predicateCommitment_binding`, this does not require the
+    `Function.Injective` hypothesis, making it non-vacuous for finite fields. -/
+theorem predicateCommitment_binding_or_collision [PoseidonHash F 3]
+    (cv1 cv2 sd1 sd2 mh1 mh2 : F)
+    (h : predicateCommitment cv1 sd1 mh1 = predicateCommitment cv2 sd2 mh2) :
+    (cv1 = cv2 ∧ sd1 = sd2 ∧ mh1 = mh2) ∨ PoseidonCollision F 3 := by
+  unfold predicateCommitment at h
+  rw [poseidon3_eq, poseidon3_eq] at h
+  by_cases heq : mkInput3 cv1 sd1 mh1 = mkInput3 cv2 sd2 mh2
+  · left; exact fin3_ext heq
+  · right; exact ⟨_, _, heq, h⟩
