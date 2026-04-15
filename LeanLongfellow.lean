@@ -45,6 +45,7 @@ import LeanLongfellow.Circuit.ECBridge
 import LeanLongfellow.Circuit.CurveInstantiation
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.ECDSACircuit
+import LeanLongfellow.Circuit.ScalarMul
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.GadgetGates
 import LeanLongfellow.Circuit.ECDSAFieldOps
