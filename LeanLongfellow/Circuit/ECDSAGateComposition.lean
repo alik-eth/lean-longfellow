@@ -16,15 +16,15 @@ into a single layer sequence and defines the concrete `ECDSACircuitSpec`.
 
 ## Circuit Layout (layers numbered from top = 0 to bottom = NL)
 
-The circuit has `12n + 7` layers for `n`-bit scalar multiplication:
+The circuit has `14n + 7` layers for `n`-bit scalar multiplication:
 
 | Phase | Layers (from top) | Count | Purpose |
 |-------|-------------------|-------|---------|
 | D     | 0                 | 1     | Equality check: `(R.x - r)²` |
 | C     | 1–3               | 3     | Point addition: `R = P1 + P2` |
-| B2    | 4 to 4+6n-1       | 6n    | Scalar mul: `u2 · Q` |
-| B1    | 4+6n to 4+12n-1   | 6n    | Scalar mul: `u1 · G` |
-| A     | 4+12n to 4+12n+2  | 3     | Field ops: `s_inv`, `u1`, `u2` |
+| B2    | 4 to 4+7n-1       | 7n    | Scalar mul: `u2 · Q` |
+| B1    | 4+7n to 4+14n-1   | 7n    | Scalar mul: `u1 · G` |
+| A     | 4+14n to 4+14n+2  | 3     | Field ops: `s_inv`, `u1`, `u2` |
 
 The verifier checks from top to bottom; the prover fills in from bottom
 to top. Layer 0 is the "output" layer.
@@ -89,18 +89,18 @@ theorem equalityCheckLayer_iff (V_curr V_next : LayerValues F 5) :
 -- ============================================================
 
 /-- Total number of layers in the gate-level ECDSA circuit with `n`-bit scalars.
-    = 1 (equality) + 3 (point add) + 6n (scalar mul 2) + 6n (scalar mul 1) + 3 (field ops)
-    = 12n + 7 -/
-def ecdsaGateNL (n : ℕ) : ℕ := 12 * n + 7
+    = 1 (equality) + 3 (point add) + 7n (scalar mul 2) + 7n (scalar mul 1) + 3 (field ops)
+    = 14n + 7 -/
+def ecdsaGateNL (n : ℕ) : ℕ := 14 * n + 7
 
 /-- The full gate-level ECDSA layer sequence.
 
     Layout (top to bottom):
     - Layer 0:                  equality check (Phase D)
     - Layers 1..3:              point addition (Phase C)
-    - Layers 4..4+6n-1:         scalar mul chain 2, u₂·Q (Phase B2)
-    - Layers 4+6n..4+12n-1:     scalar mul chain 1, u₁·G (Phase B1)
-    - Layers 4+12n..4+12n+2:    field operations (Phase A) -/
+    - Layers 4..4+7n-1:         scalar mul chain 2, u₂·Q (Phase B2)
+    - Layers 4+7n..4+14n-1:     scalar mul chain 1, u₁·G (Phase B1)
+    - Layers 4+14n..4+14n+2:    field operations (Phase A) -/
 noncomputable def ecdsaGateLayers
     (n : ℕ) : Fin (ecdsaGateNL n) → CircuitLayer F 5 :=
   fun idx =>
@@ -114,17 +114,17 @@ noncomputable def ecdsaGateLayers
       | 0 => pointAdd_layer0 F
       | 1 => pointAdd_layer1 F
       | _ => pointAdd_layer2 F
-    else if idx.val < 4 + 6 * n then
-      -- Phase B2: scalar mul chain 2 (u₂·Q), layers 4 to 4+6n-1
+    else if idx.val < 4 + 7 * n then
+      -- Phase B2: scalar mul chain 2 (u₂·Q), layers 4 to 4+7n-1
       let offset := idx.val - 4
-      scalarMulStepLayers F ⟨offset % 6, Nat.mod_lt offset (by omega)⟩
-    else if idx.val < 4 + 12 * n then
-      -- Phase B1: scalar mul chain 1 (u₁·G), layers 4+6n to 4+12n-1
-      let offset := idx.val - (4 + 6 * n)
-      scalarMulStepLayers F ⟨offset % 6, Nat.mod_lt offset (by omega)⟩
+      scalarMulStepLayers F ⟨offset % 7, Nat.mod_lt offset (by omega)⟩
+    else if idx.val < 4 + 14 * n then
+      -- Phase B1: scalar mul chain 1 (u₁·G), layers 4+7n to 4+14n-1
+      let offset := idx.val - (4 + 7 * n)
+      scalarMulStepLayers F ⟨offset % 7, Nat.mod_lt offset (by omega)⟩
     else
-      -- Phase A: field operations (layers 4+12n, 4+12n+1, 4+12n+2)
-      match idx.val - (4 + 12 * n) with
+      -- Phase A: field operations (layers 4+14n, 4+14n+1, 4+14n+2)
+      match idx.val - (4 + 14 * n) with
       | 0 => fieldOps_invCheck F
       | 1 => fieldOps_u1 F
       | _ => fieldOps_u2 F
@@ -142,7 +142,7 @@ noncomputable def ecdsaGateLayers
     The extraction proof currently uses `sorry` because the full proof
     requires composing extraction results from all four phases, and
     the scalar multiplication extraction (`scalar_mul_gate_extraction`)
-    itself has a sorry. The structure and types are correct. -/
+    requires composing all phases. The structure and types are correct. -/
 noncomputable def ecdsaGateCircuitSpec [EllipticCurve F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (n : ℕ) : ECDSACircuitSpec F 5 (ecdsaGateNL n) z Q sig where
@@ -164,7 +164,7 @@ noncomputable def ecdsaGateCircuitSpec [EllipticCurve F]
 -- ============================================================
 
 /-- The gate-level ECDSA circuit has the expected number of layers. -/
-theorem ecdsaGateNL_eq (n : ℕ) : ecdsaGateNL n = 12 * n + 7 := rfl
+theorem ecdsaGateNL_eq (n : ℕ) : ecdsaGateNL n = 14 * n + 7 := rfl
 
 /-- The equality check layer is the first (top) layer. -/
 theorem ecdsaGateLayers_zero (n : ℕ) (h : 0 < ecdsaGateNL n) :
