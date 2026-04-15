@@ -367,3 +367,137 @@ theorem p256Prime_prime :
     · -- q ∣ 835945042244614951780389953367877943453916927241
       have := prime_dvd_prime_eq prime_835945042244614951780389953367877943453916927241 hq h
       subst this; native_decide
+
+/-! ### P-256 group order primality certificate chain
+
+P-256 group order:
+  `115792089210356248762697446949407573529996955224135760342422259061068512044369`
+
+Certificate chain (bottom-up):
+- Small primes (≤ 30 bits): 3, 71, 131, 373, 3407, 17449, 38189, 126241,
+  187019741, 622491383, 3969899, 191039911 — `native_decide`
+- 1002328039319 (40 bits) — Lucas certificate, witness 19
+- 208150935158385979 (58 bits) — Lucas certificate, witness 2
+- 2624747550333869278416773953 (92 bits) — Lucas certificate, witness 7
+- p256GroupOrder (256 bits) — Lucas certificate, witness 7
+-/
+
+/-- 40-bit prime in the P-256 group order chain.
+    `1002328039319 - 1 = 2 * 126241 * 3969899` -/
+private theorem prime_1002328039319 : Nat.Prime 1002328039319 := by
+  apply lucas_primality 1002328039319 (19 : ZMod 1002328039319)
+  · native_decide
+  · intro q hq hqd
+    have : 1002328039319 - 1 = 2 * 126241 * 3969899 := by native_decide
+    rw [this] at hqd
+    rcases hq.dvd_or_dvd hqd with h | h
+    · rcases hq.dvd_or_dvd h with h | h
+      · have := prime_dvd_prime_eq Nat.prime_two hq h; subst this; native_decide
+      · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+    · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+
+/-- 58-bit prime in the P-256 group order chain.
+    `208150935158385979 - 1 = 2 * 3 * 11 * 43 * 127 * 3023 * 191039911` -/
+private theorem prime_208150935158385979 : Nat.Prime 208150935158385979 := by
+  apply lucas_primality 208150935158385979 (2 : ZMod 208150935158385979)
+  · native_decide
+  · intro q hq hqd
+    have : 208150935158385979 - 1 = 2 * 3 * 11 * 43 * 127 * 3023 * 191039911 := by native_decide
+    rw [this] at hqd
+    rcases hq.dvd_or_dvd hqd with h | h
+    · rcases hq.dvd_or_dvd h with h | h
+      · rcases hq.dvd_or_dvd h with h | h
+        · rcases hq.dvd_or_dvd h with h | h
+          · rcases hq.dvd_or_dvd h with h | h
+            · rcases hq.dvd_or_dvd h with h | h
+              · have := prime_dvd_prime_eq Nat.prime_two hq h; subst this; native_decide
+              · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+            · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+          · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+        · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+      · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+    · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+
+/-- 92-bit prime in the P-256 group order chain.
+    `2624747550333869278416773953 - 1 = 2^6 * 3^2 * 1297 * 16879 * 208150935158385979` -/
+private theorem prime_2624747550333869278416773953 :
+    Nat.Prime 2624747550333869278416773953 := by
+  apply lucas_primality 2624747550333869278416773953
+    (7 : ZMod 2624747550333869278416773953)
+  · native_decide
+  · intro q hq hqd
+    have : 2624747550333869278416773953 - 1 =
+      2 ^ 6 * 3 ^ 2 * 1297 * 16879 * 208150935158385979 := by native_decide
+    rw [this] at hqd
+    rcases hq.dvd_or_dvd hqd with h | h
+    · rcases hq.dvd_or_dvd h with h | h
+      · rcases hq.dvd_or_dvd h with h | h
+        · rcases hq.dvd_or_dvd h with h | h
+          · have := prime_dvd_prime_pow_eq Nat.prime_two hq h; subst this; native_decide
+          · have := prime_dvd_prime_pow_eq (by native_decide) hq h; subst this; native_decide
+        · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+      · have := prime_dvd_prime_eq (by native_decide) hq h; subst this; native_decide
+    · have := prime_dvd_prime_eq prime_208150935158385979 hq h; subst this; native_decide
+
+/-- The P-256 curve group order is prime.
+    `p256GroupOrder - 1 = 2^4 * 3 * 71 * 131 * 373 * 3407 * 17449 * 38189
+                          * 187019741 * 622491383 * 1002328039319
+                          * 2624747550333869278416773953` -/
+theorem p256GroupOrder_prime :
+    Nat.Prime 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551 := by
+  apply lucas_primality
+    0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+    (7 : ZMod 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551)
+  · native_decide
+  · intro q hq hqd
+    have : 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+      - 1 = 2 ^ 4 * 3 * 71 * 131 * 373 * 3407 * 17449 * 38189 * 187019741 *
+        622491383 * 1002328039319 * 2624747550333869278416773953 := by native_decide
+    rw [this] at hqd
+    rcases hq.dvd_or_dvd hqd with h | h
+    · rcases hq.dvd_or_dvd h with h | h
+      · rcases hq.dvd_or_dvd h with h | h
+        · rcases hq.dvd_or_dvd h with h | h
+          · rcases hq.dvd_or_dvd h with h | h
+            · rcases hq.dvd_or_dvd h with h | h
+              · rcases hq.dvd_or_dvd h with h | h
+                · rcases hq.dvd_or_dvd h with h | h
+                  · rcases hq.dvd_or_dvd h with h | h
+                    · rcases hq.dvd_or_dvd h with h | h
+                      · rcases hq.dvd_or_dvd h with h | h
+                        · -- q ∣ 2^4
+                          have := prime_dvd_prime_pow_eq Nat.prime_two hq h
+                          subst this; native_decide
+                        · -- q ∣ 3
+                          have := prime_dvd_prime_eq (by native_decide) hq h
+                          subst this; native_decide
+                      · -- q ∣ 71
+                        have := prime_dvd_prime_eq (by native_decide) hq h
+                        subst this; native_decide
+                    · -- q ∣ 131
+                      have := prime_dvd_prime_eq (by native_decide) hq h
+                      subst this; native_decide
+                  · -- q ∣ 373
+                    have := prime_dvd_prime_eq (by native_decide) hq h
+                    subst this; native_decide
+                · -- q ∣ 3407
+                  have := prime_dvd_prime_eq (by native_decide) hq h
+                  subst this; native_decide
+              · -- q ∣ 17449
+                have := prime_dvd_prime_eq (by native_decide) hq h
+                subst this; native_decide
+            · -- q ∣ 38189
+              have := prime_dvd_prime_eq (by native_decide) hq h
+              subst this; native_decide
+          · -- q ∣ 187019741
+            have := prime_dvd_prime_eq (by native_decide) hq h
+            subst this; native_decide
+        · -- q ∣ 622491383
+          have := prime_dvd_prime_eq (by native_decide) hq h
+          subst this; native_decide
+      · -- q ∣ 1002328039319
+        have := prime_dvd_prime_eq prime_1002328039319 hq h
+        subst this; native_decide
+    · -- q ∣ 2624747550333869278416773953
+      have := prime_dvd_prime_eq prime_2624747550333869278416773953 hq h
+      subst this; native_decide

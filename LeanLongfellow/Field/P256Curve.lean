@@ -92,7 +92,7 @@ instance : EllipticCurve F_p256 where
   Point := Point p256WCurve
   generator := p256Generator
   groupOrder := p256GroupOrder
-  hGroupOrder := ⟨by sorry⟩ -- TODO: Pocklington certificate for p256GroupOrder primality
+  hGroupOrder := ⟨p256GroupOrder_prime⟩
   scalarMul n P := n • P
   pointAdd := (· + ·)
   xCoord := weierstrassXCoord
