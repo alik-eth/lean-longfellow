@@ -51,6 +51,11 @@ import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.GadgetGates
 import LeanLongfellow.Circuit.ECDSAFieldOps
 import LeanLongfellow.Circuit.ECDSAComposition
+import LeanLongfellow.Circuit.GateCircuit
+import LeanLongfellow.Circuit.ECDSAGateFieldOps
+import LeanLongfellow.Circuit.ECDSAGateScalarMul
+import LeanLongfellow.Circuit.ECDSAGatePointAdd
+import LeanLongfellow.Circuit.ECDSAGateComposition
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
 import LeanLongfellow.Circuit.SHA256
