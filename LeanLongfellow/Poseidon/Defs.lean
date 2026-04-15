@@ -13,11 +13,11 @@ only the security property matters for protocol correctness. -/
 -- ============================================================
 
 /-- Abstract Poseidon hash with arity `n`: takes `n` field elements, returns one.
-    Collision resistance is captured by injectivity. -/
+    Collision resistance is modeled as an explicit hypothesis on theorems that need
+    it, rather than a class field, because `Function.Injective` is unsatisfiable
+    for `(Fin n → F) → F` over finite fields when `n ≥ 2`. -/
 class PoseidonHash (F : Type*) (n : ℕ) where
   hash : (Fin n → F) → F
-  /-- Collision resistance: distinct inputs produce distinct outputs. -/
-  injective : Function.Injective hash
 
 -- ============================================================
 -- Section 2: Convenience wrappers
@@ -68,11 +68,12 @@ private theorem fin3_ext {F : Type*} {a1 a2 b1 b2 c1 c2 : F}
   exact ⟨congr_fun h ⟨0, by omega⟩, congr_fun h ⟨1, by omega⟩, congr_fun h ⟨2, by omega⟩⟩
 
 /-- Commitment binding: same commitment implies same inputs.
-    Follows directly from Poseidon collision resistance (injectivity). -/
+    Requires collision resistance (injectivity) as an explicit hypothesis. -/
 theorem predicateCommitment_binding [PoseidonHash F 3]
     (cv1 cv2 sd1 sd2 mh1 mh2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : predicateCommitment cv1 sd1 mh1 = predicateCommitment cv2 sd2 mh2) :
     cv1 = cv2 ∧ sd1 = sd2 ∧ mh1 = mh2 := by
   unfold predicateCommitment at h
   rw [poseidon3_eq, poseidon3_eq] at h
-  exact fin3_ext (PoseidonHash.injective h)
+  exact fin3_ext (hcr h)

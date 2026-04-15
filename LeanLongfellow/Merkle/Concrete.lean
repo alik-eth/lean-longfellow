@@ -68,16 +68,18 @@ noncomputable def ColumnHash.ofPoseidon [PoseidonSponge F NROW]
 -- Section 3: Consistency between MerkleHash and PoseidonHash
 -- ============================================================
 
-/-- When we already have a `PoseidonHash F 2` instance (which bundles CR),
+/-- When we already have a `PoseidonHash F 2` instance and a CR hypothesis,
     we get a `MerkleHash` directly. -/
 @[reducible]
-noncomputable def MerkleHash.ofPoseidonHash [PoseidonHash F 2] :
+noncomputable def MerkleHash.ofPoseidonHash [PoseidonHash F 2]
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 2))) :
     MerkleHash F :=
-  MerkleHash.ofPoseidon (PoseidonHash.injective (n := 2))
+  MerkleHash.ofPoseidon hcr
 
-/-- When we already have a `PoseidonHash F NROW` instance,
+/-- When we already have a `PoseidonHash F NROW` instance and a CR hypothesis,
     we get a `ColumnHash` directly. -/
 @[reducible]
-noncomputable def ColumnHash.ofPoseidonHash [PoseidonHash F NROW] :
+noncomputable def ColumnHash.ofPoseidonHash [PoseidonHash F NROW]
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := NROW))) :
     ColumnHash F F NROW :=
-  ColumnHash.ofPoseidon (PoseidonHash.injective (n := NROW))
+  ColumnHash.ofPoseidon hcr

@@ -35,14 +35,15 @@ private theorem fin1_ext {F : Type*} {a1 a2 : F}
   exact congr_fun h ⟨0, by omega⟩
 
 /-- Binding: same hash implies same attribute.
-    Follows from Poseidon collision resistance. -/
+    Requires Poseidon collision resistance as an explicit hypothesis. -/
 theorem holderBinding_binding [PoseidonHash F 1]
     (attr1 attr2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
     (h : holderBindingHash attr1 = holderBindingHash attr2) :
     attr1 = attr2 := by
   unfold holderBindingHash at h
   rw [poseidon1_eq, poseidon1_eq] at h
-  exact fin1_ext (PoseidonHash.injective h)
+  exact fin1_ext (hcr h)
 
 -- ============================================================
 -- Section 3: Consistency
@@ -60,7 +61,9 @@ theorem holderBinding_consistent [PoseidonHash F 1]
 /-- Different holders produce different binding hashes.
     Contrapositive of binding. -/
 theorem holderBinding_distinguishing [PoseidonHash F 1]
-    (attr1 attr2 : F) (h_diff : attr1 ≠ attr2) :
+    (attr1 attr2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
+    (h_diff : attr1 ≠ attr2) :
     holderBindingHash attr1 ≠ holderBindingHash attr2 := by
   intro h_eq
-  exact h_diff (holderBinding_binding attr1 attr2 h_eq)
+  exact h_diff (holderBinding_binding attr1 attr2 hcr h_eq)

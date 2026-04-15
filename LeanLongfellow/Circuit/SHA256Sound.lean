@@ -89,8 +89,6 @@ theorem word32Val_eq_natCast (c : Fin 32 → F) (hc : isWord32 c) :
 
 -- Bit decomposition uniqueness — the key lemma connecting field-level
 -- and natural-number-level uniqueness via binary representation.
--- This is technically involved; we use sorry for now and will fill
--- the proof in a dedicated module.
 theorem word32_bits_eq_of_val_eq (c₁ c₂ : Fin 32 → F)
     (hc₁ : isWord32 c₁) (hc₂ : isWord32 c₂) (hchar : LargeChar F)
     (hval : word32Val c₁ = word32Val c₂) : c₁ = c₂ := by
@@ -99,7 +97,39 @@ theorem word32_bits_eq_of_val_eq (c₁ c₂ : Fin 32 → F)
     hchar _ _ (by have := word32Nat_lt c₁ hc₁; omega)
       (by have := word32Nat_lt c₂ hc₂; omega) hval
   -- Use binary_unique to show that equal nat-sums imply equal bits
-  sorry
+  -- Define natural-number bit functions
+  let b₁ : ℕ → ℕ := fun i => if h : i < 32 then (if c₁ ⟨i, h⟩ = 1 then 1 else 0) else 0
+  let b₂ : ℕ → ℕ := fun i => if h : i < 32 then (if c₂ ⟨i, h⟩ = 1 then 1 else 0) else 0
+  -- Show they are bounded by 1
+  have hb₁ : ∀ i, b₁ i ≤ 1 := fun i => by
+    simp only [b₁]; split_ifs <;> omega
+  have hb₂ : ∀ i, b₂ i ≤ 1 := fun i => by
+    simp only [b₂]; split_ifs <;> omega
+  -- Convert word32Nat to ∑ j ∈ Finset.range 32, b j * 2^j
+  have hconv₁ : word32Nat c₁ hc₁ = ∑ j ∈ Finset.range 32, b₁ j * 2 ^ j := by
+    unfold word32Nat; apply Finset.sum_nbij (fun (i : Fin 32) => (i : ℕ))
+    · intro i _; exact Finset.mem_range.mpr i.isLt
+    · intro i j _ _ h; exact Fin.ext h
+    · intro j hj; exact ⟨⟨j, Finset.mem_range.mp hj⟩, Finset.mem_univ _, rfl⟩
+    · intro ⟨i, hi⟩ _; simp only [b₁, dif_pos hi]; split_ifs <;> omega
+  have hconv₂ : word32Nat c₂ hc₂ = ∑ j ∈ Finset.range 32, b₂ j * 2 ^ j := by
+    unfold word32Nat; apply Finset.sum_nbij (fun (i : Fin 32) => (i : ℕ))
+    · intro i _; exact Finset.mem_range.mpr i.isLt
+    · intro i j _ _ h; exact Fin.ext h
+    · intro j hj; exact ⟨⟨j, Finset.mem_range.mp hj⟩, Finset.mem_univ _, rfl⟩
+    · intro ⟨i, hi⟩ _; simp only [b₂, dif_pos hi]; split_ifs <;> omega
+  -- Apply binary_unique
+  have hsum_eq : ∑ j ∈ Finset.range 32, b₁ j * 2 ^ j =
+                 ∑ j ∈ Finset.range 32, b₂ j * 2 ^ j := by
+    rw [← hconv₁, ← hconv₂]; exact hnat
+  have hbits : ∀ i, i < 32 → b₁ i = b₂ i := binary_unique 32 b₁ b₂ hb₁ hb₂ hsum_eq
+  -- Conclude c₁ = c₂ via funext
+  funext ⟨i, hi⟩
+  have hbi := hbits i hi
+  simp only [b₁, b₂, dif_pos hi] at hbi
+  rcases (isBool_iff (c₁ ⟨i, hi⟩)).mp (hc₁ ⟨i, hi⟩) with h1 | h1 <;>
+    rcases (isBool_iff (c₂ ⟨i, hi⟩)).mp (hc₂ ⟨i, hi⟩) with h2 | h2 <;>
+    simp_all
 
 -- word32Add uniqueness
 

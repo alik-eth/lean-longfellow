@@ -4,14 +4,11 @@ import LeanLongfellow.Poseidon.HolderBinding
 
 /-! # Concrete Poseidon Instantiation via Sponge Model
 
-`PoseidonHash` bundles collision resistance (injectivity) as a typeclass
-field. This is convenient but hides the cryptographic assumption.
-
-`PoseidonSponge` is a more realistic model: it carries only the hash
-function, and collision resistance appears as an explicit hypothesis
-wherever it is needed. Given a CR hypothesis one can derive
-`PoseidonHash`, so all downstream theorems (nullifier binding, holder
-binding, predicate commitment binding) carry through unchanged.
+`PoseidonSponge` is a sponge-based hash model. Given a `PoseidonSponge`,
+one can derive a `PoseidonHash` instance (both now carry only the hash
+function, with collision resistance as an explicit hypothesis).
+All downstream theorems (nullifier binding, holder binding, predicate
+commitment binding) take CR as an explicit parameter.
 
 ## Main definitions
 
@@ -62,19 +59,11 @@ class PoseidonSponge (F : Type*) (n : ℕ) where
 
 variable {F : Type*} {n : ℕ}
 
-/-- Derive `PoseidonHash` from a `PoseidonSponge` and an explicit
-    collision-resistance hypothesis.
-
-    This is the only place where the CR assumption is "consumed";
-    all downstream theorems (`nullifier_binding`, `holderBinding_binding`,
-    `predicateCommitment_binding`) work through the resulting
-    `PoseidonHash` instance. -/
+/-- Derive `PoseidonHash` from a `PoseidonSponge`. -/
 @[reducible]
-def PoseidonSponge.toPoseidonHash [PoseidonSponge F n]
-    (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := n))) :
+def PoseidonSponge.toPoseidonHash [PoseidonSponge F n] :
     PoseidonHash F n where
   hash := PoseidonSponge.hash
-  injective := hcr
 
 -- ============================================================
 -- Section 4: Re-exported theorems via the sponge interface
@@ -85,45 +74,43 @@ def PoseidonSponge.toPoseidonHash [PoseidonSponge F n]
 theorem nullifier_binding_from_sponge [PoseidonSponge F 3]
     (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := 3)))
     (cred1 cred2 contract1 contract2 salt1 salt2 : F)
-    (heq : @nullifier F (PoseidonSponge.toPoseidonHash hcr) cred1 contract1 salt1 =
-           @nullifier F (PoseidonSponge.toPoseidonHash hcr) cred2 contract2 salt2) :
+    (heq : @nullifier F PoseidonSponge.toPoseidonHash cred1 contract1 salt1 =
+           @nullifier F PoseidonSponge.toPoseidonHash cred2 contract2 salt2) :
     cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2 :=
-  @nullifier_binding F (PoseidonSponge.toPoseidonHash hcr)
-    cred1 cred2 contract1 contract2 salt1 salt2 heq
+  @nullifier_binding F PoseidonSponge.toPoseidonHash
+    cred1 cred2 contract1 contract2 salt1 salt2 hcr heq
 
 /-- Holder binding through the sponge model.
     Same holder binding hash implies same first attribute. -/
 theorem holderBinding_binding_from_sponge [PoseidonSponge F 1]
     (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := 1)))
     (attr1 attr2 : F)
-    (heq : @holderBindingHash F (PoseidonSponge.toPoseidonHash hcr) attr1 =
-           @holderBindingHash F (PoseidonSponge.toPoseidonHash hcr) attr2) :
+    (heq : @holderBindingHash F PoseidonSponge.toPoseidonHash attr1 =
+           @holderBindingHash F PoseidonSponge.toPoseidonHash attr2) :
     attr1 = attr2 :=
-  @holderBinding_binding F (PoseidonSponge.toPoseidonHash hcr) attr1 attr2 heq
+  @holderBinding_binding F PoseidonSponge.toPoseidonHash attr1 attr2 hcr heq
 
 /-- Predicate commitment binding through the sponge model.
     Same commitment implies same inputs. -/
 theorem predicateCommitment_binding_from_sponge [PoseidonSponge F 3]
     (hcr : Function.Injective (PoseidonSponge.hash (F := F) (n := 3)))
     (cv1 cv2 sd1 sd2 mh1 mh2 : F)
-    (heq : @predicateCommitment F (PoseidonSponge.toPoseidonHash hcr) cv1 sd1 mh1 =
-           @predicateCommitment F (PoseidonSponge.toPoseidonHash hcr) cv2 sd2 mh2) :
+    (heq : @predicateCommitment F PoseidonSponge.toPoseidonHash cv1 sd1 mh1 =
+           @predicateCommitment F PoseidonSponge.toPoseidonHash cv2 sd2 mh2) :
     cv1 = cv2 ∧ sd1 = sd2 ∧ mh1 = mh2 :=
-  @predicateCommitment_binding F (PoseidonSponge.toPoseidonHash hcr)
-    cv1 cv2 sd1 sd2 mh1 mh2 heq
+  @predicateCommitment_binding F PoseidonSponge.toPoseidonHash
+    cv1 cv2 sd1 sd2 mh1 mh2 hcr heq
 
 -- ============================================================
 -- Section 5: Any PoseidonHash gives a PoseidonSponge
 -- ============================================================
 
-/-- Every `PoseidonHash` instance trivially gives a `PoseidonSponge`
-    (just forget the CR field). -/
+/-- Every `PoseidonHash` instance trivially gives a `PoseidonSponge`. -/
 instance PoseidonHash.toPoseidonSponge [PoseidonHash F n] :
     PoseidonSponge F n where
   hash := PoseidonHash.hash
 
 /-- Round-tripping: converting a `PoseidonHash` to a `PoseidonSponge` and
-    back (with the original injectivity proof) recovers the same hash. -/
+    back recovers the same hash. -/
 theorem PoseidonSponge.roundtrip_hash [inst : PoseidonHash F n] :
-    (PoseidonSponge.toPoseidonHash (F := F) (n := n)
-      inst.injective).hash = PoseidonHash.hash := rfl
+    (PoseidonSponge.toPoseidonHash (F := F) (n := n)).hash = PoseidonHash.hash := rfl

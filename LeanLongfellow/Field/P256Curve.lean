@@ -50,18 +50,15 @@ def p256WCurve : WeierstrassCurve F_p256 where
 
 /-- The generator point `(Gx, Gy)` lies on the P-256 curve and is nonsingular.
 
-    This is a standard fact about the NIST P-256 curve, verifiable externally:
-    ```
-    # SageMath:
-    p = 2^256 - 2^224 + 2^192 + 2^96 - 1
-    F = GF(p)
-    E = EllipticCurve(F, [-3, 0x5ac635...])
-    G = E(Gx, Gy)  # succeeds iff (Gx, Gy) is on E
-    ```
-    The computation over a 256-bit field is beyond Lean's kernel evaluator,
-    so we accept it axiomatically. -/
-axiom p256_generator_nonsingular :
-  Nonsingular p256WCurve (↑p256_Gx : F_p256) (↑p256_Gy : F_p256)
+    Both the curve equation and the partial-derivative condition are decidable
+    equalities in `ZMod p256Prime`, verified by `native_decide`. -/
+theorem p256_generator_nonsingular :
+    Nonsingular p256WCurve (↑p256_Gx : F_p256) (↑p256_Gy : F_p256) := by
+  rw [nonsingular_iff']
+  refine ⟨?_, Or.inr ?_⟩
+  · rw [equation_iff']
+    native_decide
+  · native_decide
 
 /-- The P-256 generator point as a `WeierstrassCurve.Affine.Point`. -/
 def p256Generator : Point p256WCurve :=

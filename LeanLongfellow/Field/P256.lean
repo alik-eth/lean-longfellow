@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Field.ZMod
 import Mathlib.Data.Nat.Prime.Defs
+import LeanLongfellow.Field.Pocklington
 
 /-! # Concrete Field Instantiations
 
@@ -14,20 +15,14 @@ def p256Prime : ℕ :=
 def bn254Prime : ℕ :=
   21888242871839275222246405745257275088548364400416034343698204186575808495617
 
--- Primality proofs.
--- `native_decide` on 256-bit numbers exhausts practical compilation time
--- (>10 min at 100% CPU without completing).  We accept primality as an axiom
--- here; it can be verified externally in seconds:
---
---   # SageMath:  is_prime(p256Prime)  => True
---   # Pari/GP:   isprime(p256Prime)   => 1
---
--- If a future Lean/Mathlib version ships a fast certified primality check
--- (e.g. ECPP certificates), replace `sorry` with that proof.
+-- Primality proofs are in LeanLongfellow.Field.Pocklington, which provides
+-- certified Lucas/Pratt certificates via `lucas_primality` from Mathlib.
+-- Each proof chains through the complete factorization of `p - 1` with
+-- modular-exponentiation witness checks verified by `native_decide`.
 
-instance : Fact (Nat.Prime p256Prime) := Fact.mk (by sorry)
+instance : Fact (Nat.Prime p256Prime) := Fact.mk p256Prime_prime
 
-instance : Fact (Nat.Prime bn254Prime) := Fact.mk (by sorry)
+instance : Fact (Nat.Prime bn254Prime) := Fact.mk bn254Prime_prime
 
 /-- The P-256 scalar field (NIST curve used by Longfellow for ECDSA). -/
 abbrev F_p256 := ZMod p256Prime

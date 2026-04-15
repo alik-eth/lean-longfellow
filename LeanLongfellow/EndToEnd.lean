@@ -132,9 +132,10 @@ omit [Field F] [DecidableEq F] in
     the claim value cannot be swapped after signing. -/
 theorem zkEidas_predicate_binding [PoseidonHash F 3]
     (cv1 cv2 sd1 sd2 mh1 mh2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : predicateCommitment cv1 sd1 mh1 = predicateCommitment cv2 sd2 mh2) :
     cv1 = cv2 ∧ sd1 = sd2 ∧ mh1 = mh2 :=
-  predicateCommitment_binding cv1 cv2 sd1 sd2 mh1 mh2 h
+  predicateCommitment_binding cv1 cv2 sd1 sd2 mh1 mh2 hcr h
 
 omit [Field F] [DecidableEq F] in
 /-- **Predicate soundness (committed claim):**
@@ -147,12 +148,13 @@ omit [Field F] [DecidableEq F] in
 theorem zkEidas_predicate_soundness [LinearOrder F] [PoseidonHash F 3]
     (spec : PredicateSpec F) (claim sd_hash msg_hash claim' sd_hash' msg_hash' : F)
     (commitment : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h_comm : predicateCommitment claim sd_hash msg_hash = commitment)
     (h_comm' : predicateCommitment claim' sd_hash' msg_hash' = commitment)
     (h_pred : predicateHolds spec claim) :
     predicateHolds spec claim' := by
   have h_eq := predicateCommitment_binding claim claim' sd_hash sd_hash'
-    msg_hash msg_hash' (h_comm.trans h_comm'.symm)
+    msg_hash msg_hash' hcr (h_comm.trans h_comm'.symm)
   rw [← h_eq.1]
   exact h_pred
 
@@ -165,18 +167,20 @@ omit [Field F] [DecidableEq F] in
     Same nullifier implies same credential, contract, and salt. -/
 theorem zkEidas_nullifier_binding [PoseidonHash F 3]
     (cred1 cred2 contract1 contract2 salt1 salt2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : nullifier cred1 contract1 salt1 = nullifier cred2 contract2 salt2) :
     cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2 :=
-  nullifier_binding cred1 cred2 contract1 contract2 salt1 salt2 h
+  nullifier_binding cred1 cred2 contract1 contract2 salt1 salt2 hcr h
 
 omit [Field F] [DecidableEq F] in
 /-- **Nullifier replay prevention (re-export):**
     Same credential + same contract with equal nullifier implies same salt. -/
 theorem zkEidas_nullifier_replay [PoseidonHash F 3]
     (cred contract salt1 salt2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : nullifier cred contract salt1 = nullifier cred contract salt2) :
     salt1 = salt2 :=
-  nullifier_replay_detection cred contract salt1 salt2 h
+  nullifier_replay_detection cred contract salt1 salt2 hcr h
 
 -- ============================================================
 -- Section 6: Holder binding
@@ -187,9 +191,10 @@ omit [Field F] [DecidableEq F] in
     Same holder binding hash implies same first attribute (same holder). -/
 theorem zkEidas_holder_binding [PoseidonHash F 1]
     (attr1 attr2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
     (h : holderBindingHash attr1 = holderBindingHash attr2) :
     attr1 = attr2 :=
-  holderBinding_binding attr1 attr2 h
+  holderBinding_binding attr1 attr2 hcr h
 
 -- ============================================================
 -- Section 7: Escrow integrity

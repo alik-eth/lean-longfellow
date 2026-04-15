@@ -37,12 +37,13 @@ theorem nullifier_deterministic [PoseidonHash F 3]
 -- ============================================================
 
 /-- Nullifier binding: same nullifier implies same inputs.
-    Follows from Poseidon collision resistance. -/
+    Requires Poseidon collision resistance as an explicit hypothesis. -/
 theorem nullifier_binding [PoseidonHash F 3]
     (cred1 cred2 contract1 contract2 salt1 salt2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : nullifier cred1 contract1 salt1 = nullifier cred2 contract2 salt2) :
     cred1 = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2 := by
-  exact predicateCommitment_binding cred1 cred2 contract1 contract2 salt1 salt2 h
+  exact predicateCommitment_binding cred1 cred2 contract1 contract2 salt1 salt2 hcr h
 
 -- ============================================================
 -- Section 4: Contract scoping
@@ -53,10 +54,11 @@ theorem nullifier_binding [PoseidonHash F 3]
     Contrapositive of binding. -/
 theorem nullifier_contract_scoped [PoseidonHash F 3]
     (cred contract1 contract2 salt : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h_diff : contract1 ≠ contract2) :
     nullifier cred contract1 salt ≠ nullifier cred contract2 salt := by
   intro h_eq
-  have ⟨_, h_contract, _⟩ := nullifier_binding cred cred contract1 contract2 salt salt h_eq
+  have ⟨_, h_contract, _⟩ := nullifier_binding cred cred contract1 contract2 salt salt hcr h_eq
   exact h_diff h_contract
 
 -- ============================================================
@@ -68,7 +70,8 @@ theorem nullifier_contract_scoped [PoseidonHash F 3]
     nullifier means the same salt was reused. -/
 theorem nullifier_replay_detection [PoseidonHash F 3]
     (cred contract salt1 salt2 : F)
+    (hcr : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
     (h : nullifier cred contract salt1 = nullifier cred contract salt2) :
     salt1 = salt2 := by
-  have ⟨_, _, h_salt⟩ := nullifier_binding cred cred contract contract salt1 salt2 h
+  have ⟨_, _, h_salt⟩ := nullifier_binding cred cred contract contract salt1 salt2 hcr h
   exact h_salt

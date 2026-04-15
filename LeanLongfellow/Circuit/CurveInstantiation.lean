@@ -45,17 +45,10 @@ theorem p256_params_match : p256CurveParams.toWeierstrass = p256WCurve := by
 
 /-- The discriminant of `p256WCurve` is nonzero.
 
-    For short Weierstrass `y^2 = x^3 + ax + b`, the discriminant is
-    `-16(4a^3 + 27b^2)`.  For P-256 this is a specific 256-bit
-    nonzero value, verifiable in SageMath:
-    ```
-    sage: p = 2^256 - 2^224 + 2^192 + 2^96 - 1
-    sage: F = GF(p)
-    sage: E = EllipticCurve(F, [-3, 0x5ac635d8...])
-    sage: E.discriminant() != 0  # True
-    ```
-    Beyond Lean's kernel evaluator at this field size. -/
-axiom p256_discriminant_ne_zero : p256WCurve.Δ ≠ 0
+    For short Weierstrass `y² = x³ + ax + b`, the discriminant is
+    `-16(4a³ + 27b²)`.  For P-256 this is a specific 256-bit
+    nonzero value, verified here by `native_decide` over `ZMod p256Prime`. -/
+theorem p256_discriminant_ne_zero : p256WCurve.Δ ≠ 0 := by native_decide
 
 -- ============================================================
 -- Section 4: ecPointValid implies Nonsingular on P-256
