@@ -24,6 +24,10 @@ instance : Fact (Nat.Prime p256Prime) := Fact.mk p256Prime_prime
 
 instance : Fact (Nat.Prime bn254Prime) := Fact.mk bn254Prime_prime
 
+/-- The P-256 curve group order (number of rational points). -/
+def p256GroupOrder : ℕ :=
+  0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
 /-- The P-256 scalar field (NIST curve used by Longfellow for ECDSA). -/
 abbrev F_p256 := ZMod p256Prime
 

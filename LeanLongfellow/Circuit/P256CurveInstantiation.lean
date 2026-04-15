@@ -478,7 +478,7 @@ theorem p256_scalarMul_agree
     (hn : 2 ^ n ≤ Fintype.card F_p256)
     (hdecomp : isBitDecomp bits scalar)
     (hchain : ecScalarMulChain p256CurveParams n bits (p256_toECPoint P) ints dbl dl al) :
-    ints ⟨n, by omega⟩ = p256_toECPoint (@EllipticCurve.scalarMul F_p256 _ _ scalar P) := by
+    ints ⟨n, by omega⟩ = p256_toECPoint ((ZMod.val scalar) • P) := by
   -- Convert field bits to booleans
   set bits_bool := chainBitsToBool n bits (hchain.1) with hbb_def
   have hbits_agree : ∀ i : Fin n,
@@ -504,7 +504,8 @@ theorem p256_scalarMul_agree
   have h_val := bitsToNat_eq_val n bits scalar hdecomp bits_bool hbits_agree hn
   -- Combine: ints = toECPoint (doubleAndAdd ...) = toECPoint (bitsToNat • P)
   --   = toECPoint (ZMod.val scalar • P) = toECPoint (scalarMul scalar P)
-  -- EllipticCurve.scalarMul scalar P = (ZMod.val scalar) • P by definition
+  -- EllipticCurve.scalarMul (fieldToNat scalar) P = (ZMod.val scalar) • P by definition
+  -- (fieldToNat = ZMod.val, scalarMul n P = n • P)
   show ints ⟨n, by omega⟩ = p256_toECPoint ((ZMod.val scalar) • P)
   rw [h_chain, h_da, h_val]
 

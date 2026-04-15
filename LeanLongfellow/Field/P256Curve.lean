@@ -84,17 +84,17 @@ def weierstrassXCoord : Point p256WCurve → F_p256
       Mathlib's proven `AddCommGroup` structure.
     - **pointAdd**: the group addition `(· + ·)` from `AddCommGroup`.
     - **identity**: the zero element `Point.zero` (point at infinity).
-    - **scalarMul**: maps a field element to `ℕ` via `ZMod.val` and uses
-      the `AddCommGroup` scalar multiplication `nsmul`.  This is correct
-      when the scalar field order equals the group order.  P-256's group
-      order `n` differs from `p`, so this is an approximation suitable for
-      the abstract ECDSA spec (which only needs the data fields, not
-      group-law axioms relating `scalarMul` to `pointAdd`).
+    - **scalarMul**: takes `ℕ` and uses `AddCommGroup` scalar multiplication `n • P`.
+    - **groupOrder**: the P-256 group order (distinct from the base field order `p`).
+    - **fieldToNat**: `ZMod.val` — the canonical `[0, p)` representative.
     - **xCoord**: pattern-matches on `Point.zero` / `Point.some`. -/
 instance : EllipticCurve F_p256 where
   Point := Point p256WCurve
   generator := p256Generator
-  scalarMul n P := (ZMod.val n) • P
+  groupOrder := p256GroupOrder
+  hGroupOrder := ⟨by sorry⟩ -- TODO: Pocklington certificate for p256GroupOrder primality
+  scalarMul n P := n • P
   pointAdd := (· + ·)
   xCoord := weierstrassXCoord
   identity := Point.zero
+  fieldToNat := ZMod.val

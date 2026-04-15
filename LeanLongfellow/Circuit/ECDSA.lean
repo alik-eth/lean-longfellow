@@ -1,4 +1,5 @@
 import LeanLongfellow.Circuit.Composition
+import Mathlib.Data.ZMod.Basic
 
 open Finset Polynomial MultilinearPoly
 
@@ -19,20 +20,32 @@ concrete instance is future work.
 -- ============================================================
 
 /-- Abstract elliptic curve with the operations needed for ECDSA.
-    Parameterized by the scalar field `F`. -/
+    Parameterized by the base field `F`. Scalar multiplication takes
+    a natural number (not a field element) so that ECDSA scalars can
+    be computed in `ZMod groupOrder` and then projected to `ℕ` via
+    `ZMod.val`. -/
 class EllipticCurve (F : Type*) [Field F] where
   /-- Points on the curve (including the point at infinity). -/
   Point : Type
   /-- The generator point. -/
   generator : Point
-  /-- Scalar multiplication: `n · P`. -/
-  scalarMul : F → Point → Point
+  /-- The group order (number of points on the curve). -/
+  groupOrder : ℕ
+  /-- The group order is prime. -/
+  hGroupOrder : Fact (Nat.Prime groupOrder)
+  /-- Scalar multiplication: `n • P`. Takes ℕ, not a field element,
+      because ECDSA scalars live in `ZMod groupOrder`, not the base field. -/
+  scalarMul : ℕ → Point → Point
   /-- Point addition. -/
   pointAdd : Point → Point → Point
   /-- Extract the x-coordinate as a field element. -/
   xCoord : Point → F
   /-- The identity point (point at infinity). -/
   identity : Point
+  /-- Map a base-field element to its canonical natural-number representative.
+      For `ZMod p` this is `ZMod.val`. Used to coerce base-field values into
+      the scalar field `ZMod groupOrder` for ECDSA arithmetic. -/
+  fieldToNat : F → ℕ
 
 -- ============================================================
 -- Section 2: ECDSA verification predicate
@@ -47,16 +60,25 @@ variable {F : Type*} [Field F]
 
 /-- ECDSA verification: given message hash `z`, public key `Q`, and
     signature `(r, s)`, check that `r = x(u₁·G + u₂·Q)` where
-    `u₁ = z·s⁻¹` and `u₂ = r·s⁻¹`. -/
-def ecdsaVerify [EllipticCurve F] (z : F) (Q : EllipticCurve.Point (F := F))
+    `u₁ = z·s⁻¹ mod n` and `u₂ = r·s⁻¹ mod n`.
+
+    The scalars `u₁`, `u₂` are computed in `ZMod groupOrder` (the
+    curve's group order), NOT in the base field `F`. For P-256,
+    `p ≠ n`, so computing inverses in `F` would be incorrect. -/
+def ecdsaVerify [ec : EllipticCurve F] (z : F) (Q : EllipticCurve.Point (F := F))
     (sig : ECDSASignature F) : Prop :=
   sig.s ≠ 0 ∧
-  let s_inv := sig.s⁻¹
-  let u₁ := z * s_inv
-  let u₂ := sig.r * s_inv
+  let n := ec.groupOrder
+  have : Fact (Nat.Prime n) := ec.hGroupOrder
+  let z_n : ZMod n := (ec.fieldToNat z : ZMod n)
+  let r_n : ZMod n := (ec.fieldToNat sig.r : ZMod n)
+  let s_n : ZMod n := (ec.fieldToNat sig.s : ZMod n)
+  let s_inv := s_n⁻¹
+  let u₁ := z_n * s_inv
+  let u₂ := r_n * s_inv
   let R := EllipticCurve.pointAdd
-    (EllipticCurve.scalarMul u₁ EllipticCurve.generator)
-    (EllipticCurve.scalarMul u₂ Q)
+    (EllipticCurve.scalarMul (ZMod.val u₁) EllipticCurve.generator)
+    (EllipticCurve.scalarMul (ZMod.val u₂) Q)
   EllipticCurve.xCoord R = sig.r
 
 -- ============================================================

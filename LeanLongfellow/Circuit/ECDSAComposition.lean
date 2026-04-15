@@ -47,16 +47,22 @@ variable {F : Type*} [Field F]
 -- Section 1: The ECDSA recovery point and x-coordinate
 -- ============================================================
 
-/-- The ECDSA recovery point R = u₁·G + u₂·Q where u₁ = z·s⁻¹, u₂ = r·s⁻¹. -/
-noncomputable def ecdsaRecoveryPoint [EllipticCurve F]
+/-- The ECDSA recovery point R = u₁·G + u₂·Q where u₁ = z·s⁻¹ mod n,
+    u₂ = r·s⁻¹ mod n, with arithmetic in `ZMod groupOrder`. -/
+noncomputable def ecdsaRecoveryPoint [ec : EllipticCurve F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     EllipticCurve.Point (F := F) :=
-  let s_inv := sig.s⁻¹
-  let u₁ := z * s_inv
-  let u₂ := sig.r * s_inv
+  let n := ec.groupOrder
+  have : Fact (Nat.Prime n) := ec.hGroupOrder
+  let z_n : ZMod n := (ec.fieldToNat z : ZMod n)
+  let r_n : ZMod n := (ec.fieldToNat sig.r : ZMod n)
+  let s_n : ZMod n := (ec.fieldToNat sig.s : ZMod n)
+  let s_inv := s_n⁻¹
+  let u₁ := z_n * s_inv
+  let u₂ := r_n * s_inv
   EllipticCurve.pointAdd
-    (EllipticCurve.scalarMul u₁ EllipticCurve.generator)
-    (EllipticCurve.scalarMul u₂ Q)
+    (EllipticCurve.scalarMul (ZMod.val u₁) EllipticCurve.generator)
+    (EllipticCurve.scalarMul (ZMod.val u₂) Q)
 
 /-- The x-coordinate of the recovery point. -/
 noncomputable def ecdsaRecoveryXCoord [EllipticCurve F]

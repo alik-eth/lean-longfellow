@@ -103,7 +103,7 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] [Fintype F] whe
     2 ^ n ≤ Fintype.card F →
     isBitDecomp bits scalar →
     ecScalarMulChain params n bits (toECPoint P) ints dbl dl al →
-    ints ⟨n, by omega⟩ = toECPoint (EllipticCurve.scalarMul scalar P)
+    ints ⟨n, by omega⟩ = toECPoint (EllipticCurve.scalarMul (EllipticCurve.fieldToNat scalar) P)
   /-- Point addition agreement. -/
   pointAdd_agree : ∀ (P Q : EllipticCurve.Point (F := F))
     (p3 : ECPoint F) (lam : F),
@@ -132,11 +132,18 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] [Fintype F] whe
 /-- If the ECDSA constraint system is satisfied, then the abstract
     `ecdsaVerify` predicate holds. This provides the soundness-relevant
     extraction direction for `ECDSACircuitSpec`. -/
-theorem ecdsaConstraint_implies_verify [EllipticCurve F] [Fintype F]
+theorem ecdsaConstraint_implies_verify [ec : EllipticCurve F] [Fintype F]
     [inst : CurveInstantiation F]
     (n : ℕ) (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (wit : ECDSAWitness F n)
     (hn : 2 ^ n ≤ Fintype.card F)
+    -- Bridge: circuit scalar values match scalar-field computation
+    (h_u1_bridge : ec.fieldToNat wit.u1 =
+      ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
+        ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹))
+    (h_u2_bridge : ec.fieldToNat wit.u2 =
+      ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
+        ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹))
     (hcon : ecdsaConstraint inst.params n z
       inst.generatorPoint (inst.toECPoint Q)
       sig.r sig.s wit) :
@@ -157,14 +164,14 @@ theorem ecdsaConstraint_implies_verify [EllipticCurve F] [Fintype F]
       wit.G_doubled wit.G_double_lambdas wit.G_add_lambdas := by
     rwa [inst.generator_agree]
   have hP1 : wit.P1 = inst.toECPoint
-      (EllipticCurve.scalarMul wit.u1 EllipticCurve.generator) := by
+      (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u1) EllipticCurve.generator) := by
     rw [h_P1]
     exact inst.scalarMul_agree wit.u1 EllipticCurve.generator n
       wit.u1_bits wit.G_intermediates wit.G_doubled
       wit.G_double_lambdas wit.G_add_lambdas hn h_u1bits hsmG'
   -- P2 = scalarMul u2 Q
   have hP2 : wit.P2 = inst.toECPoint
-      (EllipticCurve.scalarMul wit.u2 Q) := by
+      (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u2) Q) := by
     rw [h_P2]
     exact inst.scalarMul_agree wit.u2 Q n
       wit.u2_bits wit.Q_intermediates wit.Q_doubled
@@ -172,15 +179,26 @@ theorem ecdsaConstraint_implies_verify [EllipticCurve F] [Fintype F]
   -- R = pointAdd P1 P2
   have hR : wit.R = inst.toECPoint
       (EllipticCurve.pointAdd
-        (EllipticCurve.scalarMul wit.u1 EllipticCurve.generator)
-        (EllipticCurve.scalarMul wit.u2 Q)) := by
+        (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u1) EllipticCurve.generator)
+        (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u2) Q)) := by
     rw [hP1, hP2] at h_add
     exact inst.pointAdd_agree _ _ wit.R wit.final_lambda h_add
   -- Unfold ecdsaVerify and prove both conjuncts
   unfold ecdsaVerify
   refine ⟨hne, ?_⟩
-  -- After unfolding, the goal has let-bindings reducing to xCoord(R) = r
-  -- We rewrite u1, u2 in terms of s_inv then use xCoord_agree
   simp only
-  rw [← hs_inv, ← h_u1, ← h_u2]
+  -- The goal requires xCoord(R') = sig.r where R' uses scalar-field arithmetic.
+  -- We bridge via h_u1_bridge, h_u2_bridge: fieldToNat wit.u1 = ZMod.val(z_n * s_n⁻¹)
+  -- and similarly for u2. Since hP1/hP2 give wit.P1/P2 in terms of fieldToNat wit.u1/u2,
+  -- we can rewrite to match the scalar-field computation.
+  conv_lhs => rw [show EllipticCurve.scalarMul
+    (ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)) EllipticCurve.generator =
+    EllipticCurve.scalarMul (ec.fieldToNat wit.u1) EllipticCurve.generator from by
+      rw [h_u1_bridge]]
+  conv_lhs => rw [show EllipticCurve.scalarMul
+    (ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)) Q =
+    EllipticCurve.scalarMul (ec.fieldToNat wit.u2) Q from by
+      rw [h_u2_bridge]]
   rw [inst.xCoord_agree, ← hR, h_xr]
