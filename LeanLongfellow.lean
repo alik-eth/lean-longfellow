@@ -33,6 +33,10 @@ import LeanLongfellow.Ligero.MerkleCommitment
 import LeanLongfellow.Ligero.FiatShamir
 import LeanLongfellow.Ligero.ProbabilisticE2E
 import LeanLongfellow.Ligero.ProbabilisticLongfellow
+import LeanLongfellow.Ligero.ColumnOpening
+import LeanLongfellow.Ligero.ColumnOpeningSoundness
+import LeanLongfellow.Ligero.ColumnTests
+import LeanLongfellow.Ligero.BlindVerifier
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining
