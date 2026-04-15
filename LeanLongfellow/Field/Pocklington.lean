@@ -5,7 +5,7 @@ import Mathlib.Data.Nat.Prime.Defs
 
 This module provides certified primality proofs for the two large primes used in
 the project — the NIST P-256 prime and the BN254 scalar-field prime — eliminating
-the `sorry`'s that previously appeared in `LeanLongfellow.Field.P256`.
+the primality axioms that previously appeared in `LeanLongfellow.Field.P256`.
 
 ## Approach
 
