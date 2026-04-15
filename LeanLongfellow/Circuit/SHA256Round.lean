@@ -114,12 +114,12 @@ def SHA256State.isValid (st : SHA256State F) : Prop :=
                 e' = d + T1,   f' = e,  g' = f,  h' = g.  -/
 def sha256RoundConstraint (st st' : SHA256State F) (K_i W_i : Fin 32 → F)
     (t1 t2 : Fin 32 → F) (carry_t2 carry_a carry_e : F) : Prop :=
-  -- T1: five-operand sum mod 2^32; carry can be 0..4
+  -- T1: five-operand sum mod 2^32; overflow can be 0..4
   isWord32 t1 ∧
-  (∃ overflow : F,
+  (∃ overflow : ℕ, overflow ≤ 4 ∧
     word32Val st.h + word32Val (sha256BigSigma1 st.e) +
       word32Val (sha256Ch st.e st.f st.g) + word32Val K_i + word32Val W_i =
-      word32Val t1 + overflow * (2 : F) ^ 32) ∧
+      word32Val t1 + (overflow : F) * (2 : F) ^ 32) ∧
   -- T2 = Σ0(a) + Maj(a,b,c)  (mod 2^32)
   word32Add (sha256BigSigma0 st.a) (sha256Maj st.a st.b st.c) t2 carry_t2 ∧
   -- a' = T1 + T2  (mod 2^32)

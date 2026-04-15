@@ -205,10 +205,10 @@ theorem sha256Round_e_add (st st' : SHA256State F)
 theorem sha256Round_t1_sum (st st' : SHA256State F)
     (K_i W_i t1 t2 : Fin 32 → F) (ct ca ce : F)
     (h : sha256RoundConstraint st st' K_i W_i t1 t2 ct ca ce) :
-    ∃ overflow : F,
+    ∃ overflow : ℕ, overflow ≤ 4 ∧
       word32Val st.h + word32Val (sha256BigSigma1 st.e) +
         word32Val (sha256Ch st.e st.f st.g) + word32Val K_i + word32Val W_i =
-        word32Val t1 + overflow * (2 : F) ^ 32 := h.2.1
+        word32Val t1 + (overflow : F) * (2 : F) ^ 32 := h.2.1
 
 -- ============================================================
 -- Section 6: Round constraint determinism
@@ -323,12 +323,12 @@ theorem messageSchedule_recurrence (W : Fin 64 → (Fin 32 → F))
     (input : Fin 16 → (Fin 32 → F))
     (h : messageScheduleConstraint W input)
     (i : Fin 64) (hi : 16 ≤ i.val) :
-    ∃ carry : F,
+    ∃ carry : ℕ, carry ≤ 3 ∧
       word32Val (sha256SmallSigma1 (W ⟨i.val - 2, by omega⟩)) +
       word32Val (W ⟨i.val - 7, by omega⟩) +
       word32Val (sha256SmallSigma0 (W ⟨i.val - 15, by omega⟩)) +
       word32Val (W ⟨i.val - 16, by omega⟩) =
-      word32Val (W i) + carry * (2 : F) ^ 32 :=
+      word32Val (W i) + (carry : F) * (2 : F) ^ 32 :=
   h.2.2 i hi
 
 -- ============================================================

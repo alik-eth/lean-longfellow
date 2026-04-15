@@ -43,14 +43,14 @@ def messageScheduleConstraint (W : Fin 64 → (Fin 32 → F))
   (∀ i : Fin 16, W ⟨i.val, by omega⟩ = input i) ∧
   -- All words are valid
   (∀ i : Fin 64, isWord32 (W i)) ∧
-  -- Expansion for i ≥ 16
+  -- Expansion for i ≥ 16; carry is bounded (sum of 4 words, so overflow ≤ 3)
   (∀ i : Fin 64, 16 ≤ i.val →
-    ∃ carry : F,
+    ∃ carry : ℕ, carry ≤ 3 ∧
       word32Val (sha256SmallSigma1 (W ⟨i.val - 2, by omega⟩)) +
       word32Val (W ⟨i.val - 7, by omega⟩) +
       word32Val (sha256SmallSigma0 (W ⟨i.val - 15, by omega⟩)) +
       word32Val (W ⟨i.val - 16, by omega⟩) =
-      word32Val (W i) + carry * (2 : F) ^ 32)
+      word32Val (W i) + (carry : F) * (2 : F) ^ 32)
 
 /-- All message-schedule words are valid 32-bit words. -/
 theorem messageSchedule_valid (W : Fin 64 → (Fin 32 → F))
