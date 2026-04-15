@@ -8,6 +8,7 @@ import LeanLongfellow.Sumcheck.Soundness
 import LeanLongfellow.Sumcheck.Pad
 import LeanLongfellow.Field.Basic
 import LeanLongfellow.Field.P256
+import LeanLongfellow.Field.P256Curve
 import LeanLongfellow.Field.Subfield
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Transform
