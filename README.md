@@ -182,6 +182,10 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 
 **Deterministic-first, then probability.** The core soundness chain is deterministic ("wrong claim => root hit"). Probability bounds are composed separately via `fiatShamir_soundness` and `longfellow_total_error`, keeping the algebraic core clean.
 
+## Future Directions
+
+**Backend-agnostic eIDAS verification.** The current formalization verifies zk-eIDAS over Longfellow (Sumcheck + Ligero). However, many of the security properties — predicate soundness, nullifier binding, escrow integrity, holder binding — are independent of the proving system. A natural next step is to abstract over the ZK backend via a generic `ZKProofSystem` typeclass, then instantiate it for both Longfellow and Groth16 (the original zk-eIDAS Circom implementation). This would prove that eIDAS security properties hold regardless of which ZK backend is used, as long as the backend satisfies basic soundness. The predicate, escrow, and Poseidon modules are already backend-agnostic; the remaining work is abstracting the circuit-to-ZK bridge.
+
 ## References
 
 - [IETF draft-google-cfrg-libzk](https://datatracker.ietf.org/doc/draft-google-cfrg-libzk/) — Longfellow protocol specification
