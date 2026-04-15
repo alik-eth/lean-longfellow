@@ -16,13 +16,15 @@ The capstone theorem `zkEidas_full_soundness` ([EndToEnd.lean](LeanLongfellow/En
 4. **Nullifier binding** — same nullifier implies same credential, contract, and salt (from Poseidon collision resistance)
 5. **Holder binding** — same holder hash implies same holder identity (from Poseidon collision resistance)
 
-The underlying proof chain builds on sumcheck soundness, GKR circuit composition, Ligero binding, and Fiat-Shamir probability bounds (`n * d / |F|`).
+A strictly stronger variant `zkEidas_full_soundness_or_collision` removes all hash injectivity hypotheses. Its conclusion is a disjunction: either all five properties hold, or a concrete collision witness can be extracted for Poseidon-3, Poseidon-1, or CRHash. This makes the theorem **non-vacuous for finite fields**, where `Function.Injective (F^n → F)` is unsatisfiable by cardinality.
 
-All theorems (590+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
+The underlying proof chain builds on sumcheck soundness, GKR multi-layer composition, Ligero binding (with Merkle commitment), Fiat-Shamir hash-derived soundness in the Random Oracle Model, and probabilistic error bounds (`≤ 2/|F|` for Ligero, `n·d/|F|` for sumcheck).
+
+All theorems (710+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
 
 ```
-$ lake env lean -c 'import LeanLongfellow.EndToEnd; #print axioms zkEidas_full_soundness'
-'zkEidas_full_soundness' depends on axioms: [propext, Classical.choice, Quot.sound]
+$ lake env lean -c 'import LeanLongfellow.EndToEnd; #print axioms zkEidas_full_soundness_or_collision'
+'zkEidas_full_soundness_or_collision' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 The only axioms are Lean's three kernel axioms — no domain-specific trusted assumptions.
@@ -60,7 +62,8 @@ LeanLongfellow/
 ├── FiatShamir/             # Fiat-Shamir (random oracle model)
 │   ├── Oracle.lean         # RandomChallenges, countSat, union bound
 │   ├── Transform.lean      # Interactive-to-non-interactive transform
-│   └── Soundness.lean      # Probability bound: n*d / |F|
+│   ├── Soundness.lean      # Probability bound: n*d / |F|
+│   └── HashDerived.lean    # Hash-derived challenges, ROM reduction
 │
 ├── Ligero/                 # Ligero commitment scheme
 │   ├── Interface.lean      # Abstract LigeroScheme typeclass
@@ -69,13 +72,17 @@ LeanLongfellow/
 │   ├── Longfellow.lean     # End-to-end Ligero soundness
 │   ├── Soundness.lean      # Binding from three tests
 │   ├── Concrete.lean       # Concrete instantiation
-│   ├── FiatShamir.lean     # Non-interactive Ligero
-│   ├── ProbabilisticBinding.lean # Single-challenge soundness (error ≤ 2/|F|)
-│   ├── ProbabilisticE2E.lean # Error bound composition
+│   ├── FiatShamir.lean     # Non-interactive Ligero (single-challenge)
+│   ├── ProbabilisticBinding.lean # Probabilistic binding (error ≤ 2/|F|)
+│   ├── ProbabilisticE2E.lean # Error bound composition (union bound)
+│   ├── ProbabilisticLongfellow.lean # niLigero → deterministic soundness bridge
 │   ├── Tableau.lean        # Matrix tableau representation
-│   ├── MerkleCommitment.lean # Merkle-based commitment
+│   ├── MerkleCommitment.lean # Column hash commitment (CR as explicit hyp)
+│   ├── MerkleLigeroScheme.lean # LigeroScheme instance with Merkle commitment
 │   ├── ReedSolomon/        # Reed-Solomon proximity testing
 │   │   ├── Defs.lean
+│   │   ├── Decode.lean     # RS decoding + knowledge extractability
+│   │   ├── ConcreteDomain.lean
 │   │   ├── Distance.lean
 │   │   └── Proximity.lean
 │   └── Tests/              # Ligero sub-protocol tests
@@ -90,7 +97,7 @@ LeanLongfellow/
 │   ├── Reduction.lean      # Per-layer sumcheck reduction
 │   ├── Composition.lean    # Multi-layer GKR composition
 │   ├── Probability.lean    # Circuit-level probability bounds
-│   ├── GateCircuit.lean    # Gate-level circuit construction
+│   ├── GateCircuit.lean    # Gate-level circuit infrastructure (s=5, 32 wires)
 │   ├── Gates.lean          # Gate-level definitions and proofs
 │   ├── WireFormat.lean     # Wire indexing
 │   ├── WireFormatSpec.lean # Wire format specification
@@ -102,10 +109,14 @@ LeanLongfellow/
 │   ├── ECBridge.lean       # Abstract-to-circuit EC bridge
 │   ├── ECDSA.lean          # ECDSA verification spec (parameterized)
 │   ├── ECDSACircuit.lean   # Constraint-level ECDSA verification
-│   ├── ECDSAComposition.lean # Non-vacuous circuit extraction + completeness
-│   ├── ECDSAFieldOps.lean  # Field op circuit layers
-│   ├── ECDSAPointOps.lean  # Point addition circuit layers
+│   ├── ECDSAComposition.lean # Abstract circuit extraction + completeness
+│   ├── ECDSAFieldOps.lean  # Abstract field op circuit layers
+│   ├── ECDSAPointOps.lean  # Abstract point addition circuit layers
 │   ├── ECDSAEqualityCheck.lean # Equality check circuit layer
+│   ├── ECDSAGateFieldOps.lean  # Gate-level field ops (Phase A, 3 layers)
+│   ├── ECDSAGateScalarMul.lean # Gate-level scalar mul (Phase B, 7 layers/step)
+│   ├── ECDSAGatePointAdd.lean  # Gate-level point add (Phase C, 3 layers)
+│   ├── ECDSAGateComposition.lean # Gate-level composition (14n+7 layers)
 │   ├── P256CurveInstantiation.lean # Concrete P-256 CurveInstantiation
 │   ├── ScalarMul.lean      # Scalar multiplication chain correctness
 │   ├── Word32.lean         # 32-bit word arithmetic in field
@@ -116,23 +127,24 @@ LeanLongfellow/
 │   └── SHA256Spec.lean     # SHA-256 specification theorems
 │
 ├── Poseidon/               # Poseidon hash (commitment layer)
-│   ├── Defs.lean           # PoseidonHash typeclass (CR as explicit hyp)
+│   ├── Defs.lean           # PoseidonHash typeclass, collision types
 │   ├── Concrete.lean       # PoseidonSponge bridge
-│   ├── Nullifier.lean      # Nullifier binding and replay prevention
-│   └── HolderBinding.lean  # Holder identity binding
+│   ├── Nullifier.lean      # Nullifier binding (+ _or_collision)
+│   └── HolderBinding.lean  # Holder identity binding (+ _or_collision)
 │
 ├── Predicate/              # Credential predicate logic
 │   ├── Defs.lean           # PredicateSpec, predicateHolds
 │   └── Correctness.lean    # Predicate soundness
 │
 ├── Escrow/                 # Key escrow for authority recovery
-│   ├── Defs.lean           # CRHash, EscrowFields, commitments
-│   ├── Correctness.lean    # Escrow integrity theorem
+│   ├── Defs.lean           # CRHash typeclass, collision types
+│   ├── Correctness.lean    # Escrow integrity (+ _or_collision)
 │   └── SHA256Bridge.lean   # SHA-256 circuit => CRHash instance
 │
 ├── Merkle/                 # Merkle tree commitments
-│   ├── Defs.lean           # MerkleHash typeclass, tree/path types
-│   └── Correctness.lean    # Binding and path verification
+│   ├── Defs.lean           # MerkleHash typeclass, collision types
+│   ├── Concrete.lean       # Poseidon-based MerkleHash/ColumnHash
+│   └── Correctness.lean    # Binding (+ _or_collision)
 │
 ├── ZeroKnowledge/          # Honest-verifier zero-knowledge
 │   ├── Defs.lean           # HVZK definitions, simulator type
@@ -153,25 +165,33 @@ LeanLongfellow/
 The formalization is structured as a layered composition. Each layer's conclusions discharge the hypotheses of the layer above.
 
 ```
-                    zkEidas_full_soundness
+              zkEidas_full_soundness_or_collision
                             |
-            +---------------+---------------+
-            |               |               |
-   zkEidas_soundness_det    |    zkEidas_predicate_soundness
-            |               |               |
-  ecdsa_longfellow_soundness|    predicateCommitment_binding
-            |               |               |
-     gkr_composition        |       (CR hypothesis)
-            |               |
-  layer_reduction_soundness |    zkEidas_escrow_integrity
-            |               |               |
-   sumcheck_soundness_det   |       escrow_integrity
-            |               |               |
-   (Schwartz-Zippel)        |    CRHash.collision_resistant
-                            |
-                 fiatShamir_soundness
-                            |
-              countSat_union_bound + countSat_adaptive_root
+      +----------+----------+----------+----------+
+      |          |          |          |          |
+    ECDSA    Predicate   Escrow    Nullifier  Holder
+      |          |          |          |          |
+      |    commitment   integrity  binding    binding
+      |    _or_collision _or_coll  _or_coll  _or_coll
+      |          |          |          |          |
+      |      (Poseidon   (CRHash  (Poseidon  (Poseidon
+      |       hash)       hash)    hash)      hash)
+      |
+  longfellow_soundness ← generateAllConstraints
+      |
+  gkr_chain_soundness (genuine multi-layer induction)
+      |
+  layer_reduction_soundness
+      |                    Probabilistic layer:
+  sumcheck_soundness_det   niLigero_binding_or_bad
+      |                         |
+  (Schwartz-Zippel)        error ≤ 2/|F|
+                                |
+                    fiatShamir_hash_soundness
+                                |
+                 deriveChallenges + ROM reduction
+                                |
+                 countSat_union_bound + countSat_adaptive_root
 ```
 
 ## Cryptographic Assumptions
@@ -180,23 +200,28 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 
 | Assumption | Typeclass | Property | Status |
 |---|---|---|---|
-| Poseidon collision resistance | `PoseidonHash` | Explicit `hcr` hypothesis on binding theorems | Hypothesis |
+| Poseidon collision resistance | `PoseidonHash` | Explicit `hcr` hypothesis or `_or_collision` | Non-vacuous |
 | Elliptic curve operations | `EllipticCurve` | Abstract group law | Instantiated (P-256) |
-| Merkle hash collision resistance | `MerkleHash` | `Function.Injective hash2` | Hypothesis |
-| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Proven (three-test) |
-| Generic collision resistance | `CRHash` | `Function.Injective hash` | Hypothesis |
+| Merkle hash collision resistance | `MerkleHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
+| Column hash collision resistance | `ColumnHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
+| Generic collision resistance | `CRHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
+| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Proven (three-test + Merkle) |
+| Random oracle | `RandomOracle` | Hash-derived challenges in ROM | Reduced to random |
 | SHA-256 constants | `SHA256Constants` | NIST FIPS 180-4 round constants | Instantiated |
 | EC circuit agreement | `CurveInstantiation` | Abstract ops match circuit constraints | Instantiated (P-256) |
 | P-256 / BN254 primality | `Fact (Nat.Prime p)` | Field characteristic is prime | Proven (Pocklington) |
 | P-256 curve nonsingularity | — | Generator on curve, discriminant ≠ 0 | Proven (`native_decide`) |
 
-Collision resistance for Poseidon, Merkle, and CRHash is modeled as an explicit `Function.Injective` hypothesis on theorems that need it, rather than a typeclass field. This avoids the unsatisfiable `(Fin n → F) → F` injectivity for finite fields while keeping the assumption visible and auditable.
+**No hash typeclass has injectivity as a class field.** Collision resistance is handled in two complementary ways:
+
+1. **Explicit hypothesis** — theorems like `predicateCommitment_binding` take `Function.Injective hash` as an argument, keeping the assumption visible and auditable.
+2. **Collision-extracting reductions** — theorems like `predicateCommitment_binding_or_collision` require no injectivity hypothesis. The conclusion is: binding holds OR a concrete collision witness can be extracted. This is **non-vacuous for finite fields**, where the injectivity hypothesis is unsatisfiable by cardinality.
 
 ## Known Limitations
 
 - **Zero `sorry`s and zero `axiom`s** in the codebase. All primality proofs use Pocklington certificates verified by `native_decide`. All curve properties use `native_decide` over `ZMod`.
-- **Collision resistance is modeled as injectivity (`Function.Injective`).** This is the standard approach in symbolic/algebraic formal verification, as Lean does not model computational complexity. However, for finite fields the hypotheses `Function.Injective (F^n -> F)` are **unsatisfiable by cardinality** when `n >= 2` (pigeonhole): there is no injective function from a larger set to a smaller one. Consequently, the binding theorems that assume hash injectivity (predicate binding, nullifier binding, holder binding, escrow integrity) hold vacuously for any concrete finite field instantiation. This is a known limitation shared by all symbolic-model formalizations. A computational model (PPT adversaries, negligible advantage) would address this but requires axiomatizing complexity theory, which is beyond the scope of current proof assistants. Collision resistance appears as an explicit hypothesis (`hcr : Function.Injective ...`) on theorems that need it, not as a typeclass field, keeping the assumption visible and auditable.
-- **ECDSA circuit extraction** uses a coefficient-embedding technique (encoding the verification predicate in `add_poly`) rather than a gate-by-gate arithmetic circuit. This is mathematically sound and proves both soundness and completeness, but does not model the physical circuit topology of a real GKR implementation.
+- **Symbolic collision resistance model.** Lean does not model computational complexity, so collision resistance is expressed as injectivity (`Function.Injective`) or collision extraction (`binding ∨ collision`). A computational model (PPT adversaries, negligible advantage) would be strictly stronger but requires axiomatizing complexity theory, which is beyond current proof assistants. The collision-extracting reductions ensure all binding theorems are non-vacuous for finite fields.
+- **SHA-256 escrow bridge covers the single-block case** (8 × 32 bits = 256 bits). The multi-block case (8 × 32 bytes = 256 bytes, requiring 5 SHA-256 blocks) is documented but not formalized.
 
 ## Design Decisions
 
@@ -204,7 +229,9 @@ Collision resistance for Poseidon, Merkle, and CRHash is modeled as an explicit 
 
 **Typeclass-based crypto assumptions.** Cryptographic primitives are axiomatized as typeclasses rather than standalone axioms. This makes assumptions explicit in theorem signatures and allows concrete instantiation (e.g., `LigeroScheme` has two concrete instances).
 
-**Deterministic-first, then probability.** The core soundness chain is deterministic ("wrong claim => root hit"). Probability bounds are composed separately via `fiatShamir_soundness` and `longfellow_total_error`, keeping the algebraic core clean.
+**Deterministic-first, then probability.** The core soundness chain is deterministic ("wrong claim => root hit"). Probability bounds are composed separately via `fiatShamir_hash_soundness` and `longfellow_total_error`, keeping the algebraic core clean. The probabilistic layer bridges single-challenge Ligero verification (`niLigeroVerify`) to the deterministic soundness conclusion via `ProbabilisticLongfellow.lean`.
+
+**Two-tier ECDSA circuit.** The ECDSA verification circuit has both an abstract and a gate-level formalization. The abstract tier (`ECDSAComposition.lean`) encodes the verification predicate as a polynomial coefficient for clean extraction proofs. The gate-level tier (`ECDSAGate*.lean`, 1500+ lines) models the physical circuit with `mulPassLayer` gates across 14n+7 layers. Both produce `ECDSACircuitSpec` instances with non-vacuous extraction.
 
 ## Future Directions
 
