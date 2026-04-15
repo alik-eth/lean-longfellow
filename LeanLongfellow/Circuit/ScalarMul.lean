@@ -302,7 +302,7 @@ theorem chainBitsToBool_agree (n : ℕ) (scalar_bits : Fin n → F)
 -- ============================================================
 
 /-- Auxiliary: the chain invariant holds at every step k ≤ n. -/
-private theorem scalarMulChain_invariant [EllipticCurve F] [inst : CurveInstantiation F]
+private theorem scalarMulChain_invariant [EllipticCurve F] [Fintype F] [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
     (hP : P = inst.toECPoint P_abs)
@@ -412,7 +412,8 @@ private theorem scalarMulChain_invariant [EllipticCurve F] [inst : CurveInstanti
        (via `CurveInstantiation.doublePoint_agree` and `identity_toECPoint`)
     2. The conditional add produces the correct next accumulator
        (via `CurveInstantiation.pointAdd_agree`) -/
-theorem scalarMulChain_matches_doubleAndAdd [EllipticCurve F] [inst : CurveInstantiation F]
+theorem scalarMulChain_matches_doubleAndAdd [EllipticCurve F] [Fintype F]
+    [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
     (hP : P = inst.toECPoint P_abs)
@@ -464,7 +465,7 @@ theorem doubleAndAdd_from_bitDecomp [EllipticCurveGroup F]
     This is the theorem that `CurveInstantiation.scalarMul_agree` would
     invoke to justify its claim that the chain computes the correct scalar
     multiple. -/
-theorem scalarMulChain_correct [EllipticCurve F] [inst : CurveInstantiation F]
+theorem scalarMulChain_correct [EllipticCurve F] [Fintype F] [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
     (hP : P = inst.toECPoint P_abs)
@@ -548,3 +549,106 @@ theorem scalarMulChain_double_fin (params : CurveParams F) (n : ℕ)
   have hstep := scalarMulChain_step params n scalar_bits P intermediates doubled
     double_lambdas add_lambdas hchain i
   exact hstep.2.1 hfin
+
+-- ============================================================
+-- Section 14: Explicit chain invariant (no CurveInstantiation)
+-- ============================================================
+
+/-- Variant of `scalarMulChain_invariant` with explicit arguments instead of
+    the `CurveInstantiation` typeclass, so that concrete instantiations can
+    call it while *building* the instance.
+
+    The proof is identical to the private `scalarMulChain_invariant`; only
+    the packaging of hypotheses differs. -/
+theorem scalarMulChain_invariant_explicit [EllipticCurve F]
+    (params : CurveParams F)
+    (toECPoint : EllipticCurve.Point (F := F) → ECPoint F)
+    (identity_toECPoint : toECPoint EllipticCurve.identity = ⟨0, 0, 1⟩)
+    (identity_agree : (toECPoint EllipticCurve.identity).is_inf = 1)
+    (nonIdentity_is_fin : ∀ p, p ≠ EllipticCurve.identity →
+      (toECPoint p).is_inf = 0)
+    (doublePoint_agree : ∀ (P : EllipticCurve.Point (F := F))
+      (d : ECPoint F) (lam : F),
+      (toECPoint P).is_inf = 0 →
+      ecDoubleConstraint params (toECPoint P) d lam →
+      d = toECPoint (EllipticCurve.pointAdd P P))
+    (pointAdd_agree : ∀ (P Q : EllipticCurve.Point (F := F))
+      (p3 : ECPoint F) (lam : F),
+      ecAddFull params (toECPoint P) (toECPoint Q) p3 lam →
+      p3 = toECPoint (EllipticCurve.pointAdd P Q))
+    (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
+    (P_abs : EllipticCurve.Point (F := F))
+    (hP : P = toECPoint P_abs)
+    (intermediates : Fin (n + 1) → ECPoint F)
+    (doubled : Fin n → ECPoint F)
+    (double_lambdas add_lambdas : Fin n → F)
+    (hchain : ecScalarMulChain params n scalar_bits P intermediates doubled
+      double_lambdas add_lambdas)
+    (bits_bool : Fin n → Bool)
+    (hbits_agree : ∀ i : Fin n, scalar_bits i = if bits_bool i then (1 : F) else 0)
+    (k : ℕ) (hk : k ≤ n) :
+    intermediates ⟨k, by omega⟩ =
+      toECPoint (doubleAndAdd k (fun i => bits_bool ⟨i.val, by omega⟩) P_abs) := by
+  induction k with
+  | zero =>
+    rw [hchain.2.1, doubleAndAdd_zero]
+    exact identity_toECPoint.symm
+  | succ k ih =>
+    have hk' : k < n := by omega
+    have hk_le : k ≤ n := by omega
+    have ih_k := ih hk_le
+    have hstep := hchain.2.2 ⟨k, hk'⟩
+    set Q_k := doubleAndAdd k (fun i => bits_bool ⟨i.val, by omega⟩) P_abs with hQ_k_def
+    have h_int_k : intermediates ⟨k, by omega⟩ = toECPoint Q_k := ih_k
+    have h_cast : (⟨k, hk'⟩ : Fin n).castSucc = ⟨k, by omega⟩ := rfl
+    have h_doubled : doubled ⟨k, hk'⟩ =
+        toECPoint (EllipticCurve.pointAdd Q_k Q_k) := by
+      by_cases hid : Q_k = EllipticCurve.identity
+      case pos =>
+        have hinf : (intermediates (⟨k, hk'⟩ : Fin n).castSucc).is_inf = 1 := by
+          rw [h_cast, h_int_k, hid]; exact identity_agree
+        rw [hstep.1 hinf]
+        have h_ecAddFull : ecAddFull params (toECPoint EllipticCurve.identity)
+            (toECPoint EllipticCurve.identity)
+            (toECPoint EllipticCurve.identity) 0 := by
+          refine ⟨fun _ => rfl, fun _ => rfl, ?_, ?_, ?_⟩
+          · intro h1 _ _ _; exact absurd h1 (by rw [identity_agree]; exact one_ne_zero)
+          · intro h1 _ _ _; exact absurd h1 (by rw [identity_agree]; exact one_ne_zero)
+          · intro h1 _ _; exact absurd h1 (by rw [identity_agree]; exact one_ne_zero)
+        have := pointAdd_agree EllipticCurve.identity EllipticCurve.identity
+          (toECPoint EllipticCurve.identity) 0 h_ecAddFull
+        rw [hid, ← this, identity_toECPoint]
+      case neg =>
+        have hfin_Q : (toECPoint Q_k).is_inf = 0 :=
+          nonIdentity_is_fin Q_k hid
+        have hfin : (intermediates (⟨k, hk'⟩ : Fin n).castSucc).is_inf = 0 := by
+          rw [h_cast, h_int_k]; exact hfin_Q
+        have hdbl := hstep.2.1 hfin
+        rw [h_cast, h_int_k] at hdbl
+        exact doublePoint_agree Q_k _ _ hfin_Q hdbl
+    rw [doubleAndAdd_succ]
+    have h_cond := hstep.2.2
+    have h_succ : (⟨k, hk'⟩ : Fin n).succ = ⟨k + 1, by omega⟩ := rfl
+    rw [h_succ] at h_cond
+    have hbit_k := hbits_agree ⟨k, hk'⟩
+    show intermediates ⟨k + 1, by omega⟩ =
+      toECPoint (let acc := Q_k
+        let doubled := EllipticCurve.pointAdd acc acc
+        if bits_bool ⟨k, by omega⟩ then EllipticCurve.pointAdd doubled P_abs else doubled)
+    simp only []
+    by_cases hb : bits_bool ⟨k, by omega⟩
+    case pos =>
+      rw [if_pos hb]
+      have hbit_one : scalar_bits ⟨k, hk'⟩ = 1 := by rw [hbit_k, if_pos hb]
+      rw [hbit_one] at h_cond
+      have h_add_full := ecCondAdd_one params (doubled ⟨k, hk'⟩) P
+        (intermediates ⟨k + 1, by omega⟩) (add_lambdas ⟨k, hk'⟩) h_cond
+      rw [h_doubled, hP] at h_add_full
+      exact pointAdd_agree (EllipticCurve.pointAdd Q_k Q_k) P_abs _ _ h_add_full
+    case neg =>
+      rw [if_neg hb]
+      have hbit_zero : scalar_bits ⟨k, hk'⟩ = 0 := by rw [hbit_k, if_neg hb]
+      rw [hbit_zero] at h_cond
+      have h_eq := ecCondAdd_zero params (doubled ⟨k, hk'⟩) P
+        (intermediates ⟨k + 1, by omega⟩) (add_lambdas ⟨k, hk'⟩) h_cond
+      rw [h_eq, h_doubled]

@@ -48,10 +48,12 @@ variable {F : Type*} [Field F] [DecidableEq F]
 -- ============================================================
 
 /-- A zk-eIDAS GKR proof bundle: everything the verifier checks for the
-    ECDSA circuit component. -/
-structure ZkEidasProof (F : Type*) [Field F] [EllipticCurve F] (s NL : ℕ) where
+    ECDSA circuit component. Parameterized by the message hash `z`,
+    public key `Q`, and signature `sig` being verified. -/
+structure ZkEidasProof (F : Type*) [Field F] [EllipticCurve F] (s NL : ℕ)
+    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) where
   /-- The ECDSA circuit specification -/
-  spec : ECDSACircuitSpec F s NL
+  spec : ECDSACircuitSpec F s NL z Q sig
   /-- Layer wire values -/
   values : Fin (NL + 1) -> LayerValues F s
   /-- Target evaluation points per layer -/
@@ -63,7 +65,8 @@ structure ZkEidasProof (F : Type*) [Field F] [EllipticCurve F] (s NL : ℕ) wher
 
 /-- The zk-eIDAS verifier's acceptance predicate for the GKR component. -/
 def zkEidasVerifierAccepts [EllipticCurve F] {s NL : ℕ}
-    (proof : ZkEidasProof F s NL)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL z Q sig)
     (_hs : 0 < 2 * s) : Prop :=
   -- All layers consistent (extraction from circuit spec)
   (∀ k : Fin NL, ∀ g : Fin s -> Bool,
@@ -88,8 +91,8 @@ def zkEidasVerifierAccepts [EllipticCurve F] {s NL : ℕ}
 
     This composes: ECDSA circuit spec -> GKR composition -> root hit. -/
 theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
-    (proof : ZkEidasProof F s NL)
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL z Q sig)
     (hs : 0 < 2 * s)
     (haccept : zkEidasVerifierAccepts proof hs)
     (hfalse : ¬ ecdsaVerify z Q sig) :
@@ -97,7 +100,7 @@ theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
       diff ≠ 0 ∧ diff.natDegree ≤ 2 ∧
       diff.eval ((proof.reductions k).rounds i).challenge = 0 := by
   obtain ⟨hcons, hreduce, hdeg, hNL, hclaim⟩ := haccept
-  exact ecdsa_longfellow_soundness proof.spec z Q sig proof.values proof.targets
+  exact ecdsa_longfellow_soundness proof.spec proof.values proof.targets
     proof.claimed_vals proof.reductions hs hNL hcons hreduce hdeg hclaim hfalse
 
 -- ============================================================
@@ -107,8 +110,8 @@ theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
 /-- **zk-eIDAS Contrapositive:**
     If no challenge hits a root, the ECDSA signature is valid. -/
 theorem zkEidas_no_root_implies_valid [EllipticCurve F] {s NL : ℕ}
-    (proof : ZkEidasProof F s NL)
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL z Q sig)
     (hs : 0 < 2 * s)
     (haccept : zkEidasVerifierAccepts proof hs)
     (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
@@ -117,7 +120,7 @@ theorem zkEidas_no_root_implies_valid [EllipticCurve F] {s NL : ℕ}
     ecdsaVerify z Q sig := by
   by_contra hfalse
   obtain ⟨k, i, diff, hne, hdeg, heval⟩ :=
-    zkEidas_soundness_det proof z Q sig hs haccept hfalse
+    zkEidas_soundness_det proof hs haccept hfalse
   exact hno_root k i diff hne hdeg heval
 
 -- ============================================================
@@ -262,8 +265,8 @@ theorem zkEidas_fiatShamir_bound [Fintype F] {n d : ℕ}
 theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
     [LinearOrder F]
     {s NL : ℕ}
-    (proof : ZkEidasProof F s NL)
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL z Q sig)
     (hs : 0 < 2 * s)
     (haccept : zkEidasVerifierAccepts proof hs)
     -- No root hit
@@ -278,4 +281,4 @@ theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
     (h_pred : predicateHolds spec claim) :
     -- Then: ECDSA verifies AND predicate holds
     ecdsaVerify z Q sig ∧ predicateHolds spec claim :=
-  ⟨zkEidas_no_root_implies_valid proof z Q sig hs haccept hno_root, h_pred⟩
+  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root, h_pred⟩

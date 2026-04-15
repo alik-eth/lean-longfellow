@@ -46,9 +46,11 @@ import LeanLongfellow.Circuit.CurveInstantiation
 import LeanLongfellow.Circuit.ECDSA
 import LeanLongfellow.Circuit.ECDSACircuit
 import LeanLongfellow.Circuit.ScalarMul
+import LeanLongfellow.Circuit.P256CurveInstantiation
 import LeanLongfellow.Circuit.Gadgets
 import LeanLongfellow.Circuit.GadgetGates
 import LeanLongfellow.Circuit.ECDSAFieldOps
+import LeanLongfellow.Circuit.ECDSAComposition
 import LeanLongfellow.Circuit.Word32
 import LeanLongfellow.Circuit.SHA256Round
 import LeanLongfellow.Circuit.SHA256

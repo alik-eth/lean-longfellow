@@ -63,23 +63,25 @@ def ecdsaVerify [EllipticCurve F] (z : F) (Q : EllipticCurve.Point (F := F))
 -- Section 3: Circuit correctness specification
 -- ============================================================
 
-/-- Specification of a circuit that correctly implements ECDSA verification.
+/-- Specification of a circuit that correctly implements ECDSA verification
+    for a specific message hash `z`, public key `Q`, and signature `sig`.
 
     The **extraction** property says: if all layers are consistent and the
     output gate evaluates to `1`, then the ECDSA signature is valid. This
     is the soundness-relevant direction.
 
-    Constructing a concrete instance requires building the actual ECDSA
-    arithmetic circuit, which is future work. -/
+    The circuit is parameterized by `(z, Q, sig)` because a real verification
+    circuit encodes the specific values being checked. This allows non-vacuous
+    extraction: for a valid signature, the circuit CAN output `1`. -/
 structure ECDSACircuitSpec (F : Type*) [Field F] [EllipticCurve F]
-    (s NL : ℕ) where
+    (s NL : ℕ) (z : F) (Q : EllipticCurve.Point (F := F))
+    (sig : ECDSASignature F) where
   /-- The circuit layers. -/
   layers : Fin NL → CircuitLayer F s
   /-- Extraction: if the circuit is layer-consistent and the output
       gate evaluates to `1` at some target, then ECDSA verifies. -/
-  extraction : ∀ (z : F) (Q : EllipticCurve.Point (F := F))
-    (sig : ECDSASignature F)
-    (values : Fin (NL + 1) → LayerValues F s)
+  extraction :
+    ∀ (values : Fin (NL + 1) → LayerValues F s)
     (target : Fin s → F),
     (∀ k : Fin NL, ∀ g : Fin s → Bool,
       layerConsistent (layers k) (values k.castSucc) (values k.succ) g) →
@@ -97,15 +99,15 @@ omit [DecidableEq F] in
     layers consistent and the output evaluates to `1`, the signature
     is valid. Direct from the spec. -/
 theorem ecdsa_circuit_extraction {s NL : ℕ}
-    (spec : ECDSACircuitSpec F s NL)
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (spec : ECDSACircuitSpec F s NL z Q sig)
     (values : Fin (NL + 1) → LayerValues F s)
     (target : Fin s → F)
     (hcons : ∀ k : Fin NL, ∀ g : Fin s → Bool,
       layerConsistent (spec.layers k) (values k.castSucc) (values k.succ) g)
     (hout : (values ⟨0, by omega⟩).eval target = 1) :
     ecdsaVerify z Q sig :=
-  spec.extraction z Q sig values target hcons hout
+  spec.extraction values target hcons hout
 
 /-- **ECDSA–Longfellow soundness:** if a correct ECDSA circuit exists
     and the GKR verifier accepts a claim that "the output is `1`"
@@ -117,8 +119,8 @@ theorem ecdsa_circuit_extraction {s NL : ℕ}
        match the actual circuit output → `hclaim_wrong`.
     2. `gkr_composition` → root hit. -/
 theorem ecdsa_longfellow_soundness {s NL : ℕ}
-    (spec : ECDSACircuitSpec F s NL)
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (spec : ECDSACircuitSpec F s NL z Q sig)
     (values : Fin (NL + 1) → LayerValues F s)
     (targets : Fin NL → (Fin s → F))
     (claimed_vals : Fin NL → F)
@@ -147,6 +149,6 @@ theorem ecdsa_longfellow_soundness {s NL : ℕ}
       (values ⟨0, by omega⟩).eval (targets ⟨0, hNL⟩) := by
     intro heq
     rw [hclaim] at heq
-    exact hfalse (spec.extraction z Q sig values (targets ⟨0, hNL⟩) hcons heq.symm)
+    exact hfalse (spec.extraction values (targets ⟨0, hNL⟩) hcons heq.symm)
   exact gkr_composition spec.layers values targets claimed_vals reductions
     hs hNL hcons haccept hdeg hclaim_wrong

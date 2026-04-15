@@ -17,7 +17,7 @@ The capstone theorem `zkEidas_full_soundness` ([EndToEnd.lean](LeanLongfellow/En
 5. **Fiat-Shamir probability bound** — cheating probability bounded by `n * d / |F|`
 6. **Predicate/nullifier/escrow binding** — application-level security properties from collision resistance
 
-All theorems (310+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry` or `admit` statements.
+All theorems (350+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
 
 ## Building
 
@@ -88,15 +88,23 @@ LeanLongfellow/
 │   ├── GadgetGates.lean    # Gadget-to-gate compilation
 │   ├── ECArith.lean        # Elliptic curve arithmetic constraints
 │   ├── ECBridge.lean       # Abstract-to-circuit EC bridge
-│   ├── ECDSA.lean          # ECDSA verification circuit
-│   ├── ECDSACircuit.lean   # Concrete ECDSA circuit instantiation
+│   ├── ECDSA.lean          # ECDSA verification spec (parameterized)
+│   ├── ECDSACircuit.lean   # Constraint-level ECDSA verification
+│   ├── ECDSAComposition.lean # Non-vacuous circuit extraction + completeness
+│   ├── ECDSAFieldOps.lean  # Field op circuit layers
+│   ├── ECDSAPointOps.lean  # Point addition circuit layers
+│   ├── ECDSAEqualityCheck.lean # Equality check circuit layer
+│   ├── ScalarMul.lean      # Scalar multiplication chain correctness
 │   ├── Word32.lean         # 32-bit word arithmetic in field
 │   ├── SHA256.lean         # SHA-256 compression constraints
+│   ├── SHA256NIST.lean     # NIST FIPS 180-4 concrete constants
 │   ├── SHA256Round.lean    # SHA-256 per-round constraints
+│   ├── SHA256Sound.lean    # SHA-256 circuit determinism
 │   └── SHA256Spec.lean     # SHA-256 specification theorems
 │
 ├── Poseidon/               # Poseidon hash (commitment layer)
-│   ├── Defs.lean           # PoseidonHash typeclass, commitment binding
+│   ├── Defs.lean           # PoseidonHash typeclass (CR as explicit hyp)
+│   ├── Concrete.lean       # PoseidonSponge bridge
 │   ├── Nullifier.lean      # Nullifier binding and replay prevention
 │   └── HolderBinding.lean  # Holder identity binding
 │
@@ -119,7 +127,10 @@ LeanLongfellow/
 │
 ├── Field/                  # Finite field instantiations
 │   ├── Basic.lean          # ZMod 97 (test field)
-│   └── P256.lean           # P-256 and BN254 prime declarations
+│   ├── P256.lean           # P-256 and BN254 prime declarations
+│   ├── P256Curve.lean      # Concrete P-256 EllipticCurve instance
+│   ├── Pocklington.lean    # Pocklington primality certificates
+│   └── Subfield.lean       # GF(2^16) → GF(2^128) embedding
 │
 └── EndToEnd.lean           # Capstone: zkEidas_full_soundness
 ```
@@ -137,7 +148,7 @@ The formalization is structured as a layered composition. Each layer's conclusio
             |               |               |
   ecdsa_longfellow_soundness|    predicateCommitment_binding
             |               |               |
-     gkr_composition        |       PoseidonHash.injective
+     gkr_composition        |       (CR hypothesis)
             |               |
   layer_reduction_soundness |    zkEidas_escrow_integrity
             |               |               |
@@ -154,29 +165,25 @@ The formalization is structured as a layered composition. Each layer's conclusio
 
 The formalization is parametric over standard cryptographic primitives, encoded as Lean typeclasses:
 
-| Assumption | Typeclass | Property | Standard? |
+| Assumption | Typeclass | Property | Status |
 |---|---|---|---|
-| Poseidon collision resistance | `PoseidonHash` | `Function.Injective hash` | Yes |
-| Elliptic curve operations | `EllipticCurve` | Abstract group law | Yes |
-| Merkle hash collision resistance | `MerkleHash` | `Function.Injective hash2` | Yes |
-| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Yes |
-| Generic collision resistance | `CRHash` | `Function.Injective hash` | Yes |
-| SHA-256 collision resistance | `SHA256Spec` | `Function.Injective sha256` | Yes |
-| SHA-256 constants | `SHA256Constants` | Round constants are valid 32-bit words | Factual |
-| EC circuit agreement | `CurveInstantiation` | Abstract ops match circuit constraints | Bridge |
-| SHA-256 circuit soundness | `SHA256CircuitSound` | Circuit constraints are deterministic | Bridge |
+| Poseidon collision resistance | `PoseidonHash` | Explicit `hcr` hypothesis on binding theorems | Hypothesis |
+| Elliptic curve operations | `EllipticCurve` | Abstract group law | Instantiated (P-256) |
+| Merkle hash collision resistance | `MerkleHash` | `Function.Injective hash2` | Hypothesis |
+| Ligero binding | `LigeroScheme` | `verify(commit w) => satisfiesAll w` | Proven (three-test) |
+| Generic collision resistance | `CRHash` | `Function.Injective hash` | Hypothesis |
+| SHA-256 constants | `SHA256Constants` | NIST FIPS 180-4 round constants | Instantiated |
+| EC circuit agreement | `CurveInstantiation` | Abstract ops match circuit constraints | Instantiated (P-256) |
+| P-256 / BN254 primality | `Fact (Nat.Prime p)` | Field characteristic is prime | Proven (Pocklington) |
+| P-256 curve nonsingularity | — | Generator on curve, discriminant ≠ 0 | Proven (`native_decide`) |
 
-"Bridge" assumptions connect abstract mathematical objects to concrete circuit representations. They are specific to this formalization and would need separate verification for a given circuit implementation.
+Collision resistance for Poseidon, Merkle, and CRHash is modeled as an explicit `Function.Injective` hypothesis on theorems that need it, rather than a typeclass field. This avoids the unsatisfiable `(Fin n → F) → F` injectivity for finite fields while keeping the assumption visible and auditable.
 
 ## Known Limitations
 
-- **3 `sorry`s** remain in the codebase:
-  - `Field/P256.lean:28` — `Nat.Prime p256Prime`: primality of the P-256 prime.
-  - `Field/P256.lean:30` — `Nat.Prime bn254Prime`: primality of the BN254 prime.
-  - `Circuit/SHA256Sound.lean:99` — `word32_bits_eq_of_val_eq`: binary representation uniqueness at field level (if two field elements encode the same 32-bit word, their bit decompositions agree).
-  The two primality `sorry`s exist because Lean's `native_decide` cannot handle 256-bit primality in practical compilation time. These are NIST-standardized primes verifiable via external tools (e.g., ECPP certificates, PARI/GP). The SHA-256 `sorry` is a technical lemma about bit-level determinism that requires showing injectivity of the field-element-to-bits encoding.
-- **Collision resistance is modeled as injectivity**, which is stronger than the standard computational definition (no PPT adversary can find collisions). This is the standard approach in symbolic/algebraic formal verification, as Lean does not model computational complexity.
-- **`CurveInstantiation`** requires proof that abstract elliptic curve operations agree with the circuit constraint representation. This bridge must be verified per concrete curve instantiation.
+- **Zero `sorry`s and zero `axiom`s** in the codebase. All primality proofs use Pocklington certificates verified by `native_decide`. All curve properties use `native_decide` over `ZMod`.
+- **Collision resistance is modeled as injectivity**, which is stronger than the standard computational definition (no PPT adversary can find collisions). This is the standard approach in symbolic/algebraic formal verification, as Lean does not model computational complexity. Collision resistance appears as an explicit hypothesis (`hcr : Function.Injective ...`) on theorems that need it, not as a typeclass field.
+- **ECDSA circuit extraction** uses a coefficient-embedding technique (encoding the verification predicate in `add_poly`) rather than a gate-by-gate arithmetic circuit. This is mathematically sound and proves both soundness and completeness, but does not model the physical circuit topology of a real GKR implementation.
 
 ## Design Decisions
 

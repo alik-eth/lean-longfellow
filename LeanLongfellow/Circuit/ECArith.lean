@@ -95,9 +95,9 @@ def ecAddFull (params : CurveParams F) (p1 p2 p3 : ECPoint F) (lambda : F) : Pro
   (p1.is_inf = 1 → p3 = p2) ∧
   -- Case: P2 is infinity
   (p2.is_inf = 1 → p3 = p1) ∧
-  -- Case: both finite, x₁ = x₂, y₁ = -y₂ → result is infinity
+  -- Case: both finite, x₁ = x₂, y₁ = -y₂ → result is canonical infinity
   (p1.is_inf = 0 → p2.is_inf = 0 → p1.x = p2.x → p1.y + p2.y = 0 →
-    p3.is_inf = 1) ∧
+    p3 = ⟨0, 0, 1⟩) ∧
   -- Case: both finite, x₁ = x₂, y₁ = y₂ → doubling
   (p1.is_inf = 0 → p2.is_inf = 0 → p1.x = p2.x → p1.y = p2.y →
     ecDoubleConstraint params p1 p3 lambda) ∧
@@ -220,13 +220,21 @@ theorem ecAddFull_identity_right (params : CurveParams F) (p1 p3 : ECPoint F) (l
     p3 = p1 :=
   hadd.2.1 rfl
 
-/-- Adding a point and its negation yields the identity. -/
+/-- Adding a point and its negation yields the canonical identity. -/
 theorem ecAddFull_inverse (params : CurveParams F) (p1 p2 p3 : ECPoint F) (lambda : F)
     (hadd : ecAddFull params p1 p2 p3 lambda)
     (h1 : p1.is_inf = 0) (h2 : p2.is_inf = 0)
     (hx : p1.x = p2.x) (hy : p1.y + p2.y = 0) :
-    p3.is_inf = 1 :=
+    p3 = ⟨0, 0, 1⟩ :=
   hadd.2.2.1 h1 h2 hx hy
+
+/-- Adding a point and its negation yields infinity (weaker form). -/
+theorem ecAddFull_inverse_is_inf (params : CurveParams F) (p1 p2 p3 : ECPoint F) (lambda : F)
+    (hadd : ecAddFull params p1 p2 p3 lambda)
+    (h1 : p1.is_inf = 0) (h2 : p2.is_inf = 0)
+    (hx : p1.x = p2.x) (hy : p1.y + p2.y = 0) :
+    p3.is_inf = 1 := by
+  rw [ecAddFull_inverse params p1 p2 p3 lambda hadd h1 h2 hx hy]
 
 -- ============================================================
 -- Section 10: Conditional add correctness

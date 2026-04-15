@@ -33,11 +33,13 @@ theorem isBool_iff (x : F) : isBool x ↔ x = 0 ∨ x = 1 := by
 -- Section 2: Bit Decomposition
 -- ============================================================
 
-/-- A vector of field elements represents the bits of v:
-    v = ∑ᵢ bits(i) * 2^i, and each bit is boolean. -/
+/-- A vector of field elements represents the bits of v (MSB-first):
+    `v = ∑ᵢ bits(i) * 2^(n-1-i)`, and each bit is boolean.
+    Index 0 is the most significant bit (coefficient of `2^(n-1)`),
+    matching the processing order of `doubleAndAdd`/`ecScalarMulChain`. -/
 def isBitDecomp {n : ℕ} (bits : Fin n → F) (v : F) : Prop :=
   (∀ i, isBool (bits i)) ∧
-  v = ∑ i : Fin n, bits i * (2 : F) ^ (i : ℕ)
+  v = ∑ i : Fin n, bits i * (2 : F) ^ (n - 1 - (i : ℕ))
 
 /-- If bits are a valid decomposition, each bit is 0 or 1. -/
 theorem isBitDecomp_bits_bool {n : ℕ} (bits : Fin n → F) (v : F)
@@ -53,10 +55,10 @@ theorem isBitDecomp_bits_bool {n : ℕ} (bits : Fin n → F) (v : F)
 def inRange (n : ℕ) (v : F) : Prop :=
   ∃ bits : Fin n → F, isBitDecomp bits v
 
-/-- If v has an n-bit decomposition, v equals a sum of powers of 2. -/
+/-- If v has an n-bit decomposition, v equals a sum of powers of 2 (MSB-first). -/
 theorem inRange_sum {n : ℕ} (bits : Fin n → F) (v : F)
     (h : isBitDecomp bits v) :
-    v = ∑ i : Fin n, bits i * (2 : F) ^ (i : ℕ) := h.2
+    v = ∑ i : Fin n, bits i * (2 : F) ^ (n - 1 - (i : ℕ)) := h.2
 
 -- ============================================================
 -- Section 4: Equality Check

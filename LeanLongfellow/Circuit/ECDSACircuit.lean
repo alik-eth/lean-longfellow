@@ -81,7 +81,7 @@ def ecdsaConstraint (params : CurveParams F) (n : ℕ)
 /-- Connects abstract `EllipticCurve` operations to concrete
     `CurveParams`/`ECPoint` gadgets. The `_agree` fields are axioms
     that would be proven when instantiating a specific curve. -/
-class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] where
+class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] [Fintype F] where
   /-- Underlying curve parameters. -/
   params : CurveParams F
   /-- The generator as an ECPoint. -/
@@ -100,6 +100,7 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] where
   scalarMul_agree : ∀ (scalar : F) (P : EllipticCurve.Point (F := F)) (n : ℕ)
     (bits : Fin n → F) (ints : Fin (n + 1) → ECPoint F)
     (dbl : Fin n → ECPoint F) (dl al : Fin n → F),
+    2 ^ n ≤ Fintype.card F →
     isBitDecomp bits scalar →
     ecScalarMulChain params n bits (toECPoint P) ints dbl dl al →
     ints ⟨n, by omega⟩ = toECPoint (EllipticCurve.scalarMul scalar P)
@@ -131,9 +132,11 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] where
 /-- If the ECDSA constraint system is satisfied, then the abstract
     `ecdsaVerify` predicate holds. This provides the soundness-relevant
     extraction direction for `ECDSACircuitSpec`. -/
-theorem ecdsaConstraint_implies_verify [EllipticCurve F] [inst : CurveInstantiation F]
+theorem ecdsaConstraint_implies_verify [EllipticCurve F] [Fintype F]
+    [inst : CurveInstantiation F]
     (n : ℕ) (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (wit : ECDSAWitness F n)
+    (hn : 2 ^ n ≤ Fintype.card F)
     (hcon : ecdsaConstraint inst.params n z
       inst.generatorPoint (inst.toECPoint Q)
       sig.r sig.s wit) :
@@ -158,14 +161,14 @@ theorem ecdsaConstraint_implies_verify [EllipticCurve F] [inst : CurveInstantiat
     rw [h_P1]
     exact inst.scalarMul_agree wit.u1 EllipticCurve.generator n
       wit.u1_bits wit.G_intermediates wit.G_doubled
-      wit.G_double_lambdas wit.G_add_lambdas h_u1bits hsmG'
+      wit.G_double_lambdas wit.G_add_lambdas hn h_u1bits hsmG'
   -- P2 = scalarMul u2 Q
   have hP2 : wit.P2 = inst.toECPoint
       (EllipticCurve.scalarMul wit.u2 Q) := by
     rw [h_P2]
     exact inst.scalarMul_agree wit.u2 Q n
       wit.u2_bits wit.Q_intermediates wit.Q_doubled
-      wit.Q_double_lambdas wit.Q_add_lambdas h_u2bits h_smQ
+      wit.Q_double_lambdas wit.Q_add_lambdas hn h_u2bits h_smQ
   -- R = pointAdd P1 P2
   have hR : wit.R = inst.toECPoint
       (EllipticCurve.pointAdd
