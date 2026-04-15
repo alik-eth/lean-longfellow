@@ -375,3 +375,205 @@ theorem zkEidas_full_soundness_or_collision [EllipticCurve F] [PoseidonHash F 3]
       · right; left; exact hcol3
     · right; left; exact hcol3
   · right; right; right; exact hcol_escrow
+
+-- ============================================================
+-- Section 11: Unified full proof bundle
+-- ============================================================
+
+set_option autoImplicit false in
+/-- **Unified zk-eIDAS proof bundle.**
+
+    Packages ALL data needed to verify the five zk-eIDAS security
+    properties into a single structure: GKR circuit proof, predicate
+    commitment, escrow digest, nullifier, and holder binding.
+
+    The fields mirror the hypotheses of `zkEidas_full_soundness` so
+    that the end-to-end theorem operates on one object. -/
+structure ZkEidasFullProof (F : Type*) [Field F] [EllipticCurve F]
+    [PoseidonHash F 3] [PoseidonHash F 1] [CRHash (EscrowFields F) F]
+    (s NL : ℕ) where
+  /-- Message hash -/
+  z : F
+  /-- Public key -/
+  Q : EllipticCurve.Point (F := F)
+  /-- ECDSA signature -/
+  sig : ECDSASignature F
+  /-- GKR proof data (circuit layers, values, reductions, etc.) -/
+  gkrProof : ZkEidasProof F s NL z Q sig
+  /-- Predicate specification -/
+  predSpec : PredicateSpec F
+  /-- Original claim value -/
+  cv : F
+  /-- Seed array hash -/
+  sd : F
+  /-- Message hash for predicate -/
+  mh : F
+  /-- Alternative claim value (adversary-chosen) -/
+  cv' : F
+  /-- Alternative seed (adversary-chosen) -/
+  sd' : F
+  /-- Alternative message hash (adversary-chosen) -/
+  mh' : F
+  /-- Shared predicate commitment -/
+  commitment : F
+  /-- Original escrow fields -/
+  escrowOriginal : EscrowFields F
+  /-- Decrypted escrow fields -/
+  escrowDecrypted : EscrowFields F
+  /-- Escrow digest -/
+  escrowDigestVal : F
+  /-- First credential id (nullifier) -/
+  cred₁ : F
+  /-- Second credential id (nullifier) -/
+  cred₂ : F
+  /-- First contract hash (nullifier) -/
+  contract₁ : F
+  /-- Second contract hash (nullifier) -/
+  contract₂ : F
+  /-- First salt (nullifier) -/
+  salt₁ : F
+  /-- Second salt (nullifier) -/
+  salt₂ : F
+  /-- First holder attribute -/
+  attr₁ : F
+  /-- Second holder attribute -/
+  attr₂ : F
+
+-- ============================================================
+-- Section 12: Unified verifier predicate
+-- ============================================================
+
+set_option autoImplicit false in
+/-- **Unified zk-eIDAS verifier.**
+
+    Single predicate that checks every verification condition for the
+    five zk-eIDAS security properties:
+
+    1. GKR circuit accepts (layer consistency, reductions, degree bounds,
+       output = 1).
+    2. No sumcheck challenge hits a polynomial root (Schwartz-Zippel guard).
+    3. Predicate commitments match the shared commitment.
+    4. Predicate holds on the original claim.
+    5. Escrow circuit commitment is correct and authority verification passes.
+    6. Nullifiers match.
+    7. Holder binding hashes match. -/
+def zkEidasFullVerify {F : Type*} [Field F] [DecidableEq F] [EllipticCurve F]
+    [PoseidonHash F 3] [PoseidonHash F 1] [CRHash (EscrowFields F) F]
+    [LinearOrder F]
+    {s NL : ℕ}
+    (proof : ZkEidasFullProof F s NL)
+    (hs : 0 < 2 * s) : Prop :=
+  -- (1) GKR circuit accepts
+  zkEidasVerifierAccepts proof.gkrProof hs ∧
+  -- (2) No sumcheck challenge hits a polynomial root
+  (∀ k : Fin NL, ∀ i : Fin (2 * s),
+    ∀ diff : F[X], diff ≠ 0 → diff.natDegree ≤ 2 →
+    diff.eval ((proof.gkrProof.reductions k).rounds i).challenge ≠ 0) ∧
+  -- (3a) Original commitment matches
+  predicateCommitment proof.cv proof.sd proof.mh = proof.commitment ∧
+  -- (3b) Alternative commitment matches
+  predicateCommitment proof.cv' proof.sd' proof.mh' = proof.commitment ∧
+  -- (4) Predicate holds on original claim
+  predicateHolds proof.predSpec proof.cv ∧
+  -- (5a) Escrow circuit commitment correct
+  escrowCommitmentCorrect proof.escrowOriginal proof.escrowDigestVal ∧
+  -- (5b) Escrow authority verification passes
+  escrowAuthorityVerifies proof.escrowDecrypted proof.escrowDigestVal ∧
+  -- (6) Nullifiers match
+  nullifier proof.cred₁ proof.contract₁ proof.salt₁ =
+    nullifier proof.cred₂ proof.contract₂ proof.salt₂ ∧
+  -- (7) Holder binding hashes match
+  holderBindingHash proof.attr₁ = holderBindingHash proof.attr₂
+
+-- ============================================================
+-- Section 13: Unified soundness theorem
+-- ============================================================
+
+set_option autoImplicit false in
+/-- **Unified zk-eIDAS soundness.**
+
+    From a single verified `ZkEidasFullProof`, derives all five security
+    properties in one theorem:
+
+    1. **ECDSA validity** — the signature is valid.
+    2. **Predicate binding** — the adversary's alternative claim also
+       satisfies the predicate.
+    3. **Escrow integrity** — original and decrypted fields are equal.
+    4. **Nullifier binding** — same nullifier implies same credential,
+       contract, and salt.
+    5. **Holder binding** — same holder hash implies same attribute.
+
+    Collision resistance (hash injectivity) is required as explicit
+    hypotheses; all other assumptions are packed into `zkEidasFullVerify`. -/
+theorem zkEidasFull_soundness {F : Type*} [Field F] [DecidableEq F]
+    [EllipticCurve F] [PoseidonHash F 3] [PoseidonHash F 1]
+    [LinearOrder F] [CRHash (EscrowFields F) F]
+    {s NL : ℕ}
+    (proof : ZkEidasFullProof F s NL)
+    (hs : 0 < 2 * s)
+    (hverify : zkEidasFullVerify proof hs)
+    (hcr3 : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
+    (hcr1 : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
+    (hcr_escrow : Function.Injective (CRHash.hash (α := EscrowFields F) (β := F))) :
+    ecdsaVerify proof.z proof.Q proof.sig ∧
+    predicateHolds proof.predSpec proof.cv' ∧
+    proof.escrowOriginal = proof.escrowDecrypted ∧
+    (proof.cred₁ = proof.cred₂ ∧ proof.contract₁ = proof.contract₂ ∧
+      proof.salt₁ = proof.salt₂) ∧
+    proof.attr₁ = proof.attr₂ := by
+  obtain ⟨haccept, hno_root, hcomm, hcomm', hpred, hescrow_c, hescrow_v,
+    hnull, hholder⟩ := hverify
+  exact ⟨zkEidas_no_root_implies_valid proof.gkrProof hs haccept hno_root,
+    zkEidas_predicate_soundness proof.predSpec proof.cv proof.sd proof.mh
+      proof.cv' proof.sd' proof.mh' proof.commitment hcr3 hcomm hcomm' hpred,
+    zkEidas_escrow_integrity proof.escrowOriginal proof.escrowDecrypted
+      proof.escrowDigestVal hcr_escrow hescrow_c hescrow_v,
+    zkEidas_nullifier_binding proof.cred₁ proof.cred₂ proof.contract₁
+      proof.contract₂ proof.salt₁ proof.salt₂ hcr3 hnull,
+    zkEidas_holder_binding proof.attr₁ proof.attr₂ hcr1 hholder⟩
+
+-- ============================================================
+-- Section 14: Unified soundness (collision-extracting)
+-- ============================================================
+
+open Classical in
+set_option autoImplicit false in
+/-- **Unified zk-eIDAS soundness (collision-extracting).**
+
+    The same five-property composition as `zkEidasFull_soundness`, but
+    without assuming hash injectivity.  Either all five security properties
+    hold, OR a concrete collision can be extracted for one of the hash
+    functions (Poseidon-3, Poseidon-1, or CRHash/escrow). -/
+theorem zkEidasFull_soundness_or_collision {F : Type*} [Field F] [DecidableEq F]
+    [EllipticCurve F] [PoseidonHash F 3] [PoseidonHash F 1]
+    [LinearOrder F] [CRHash (EscrowFields F) F]
+    {s NL : ℕ}
+    (proof : ZkEidasFullProof F s NL)
+    (hs : 0 < 2 * s)
+    (hverify : zkEidasFullVerify proof hs) :
+    (ecdsaVerify proof.z proof.Q proof.sig ∧
+     predicateHolds proof.predSpec proof.cv' ∧
+     proof.escrowOriginal = proof.escrowDecrypted ∧
+     (proof.cred₁ = proof.cred₂ ∧ proof.contract₁ = proof.contract₂ ∧
+       proof.salt₁ = proof.salt₂) ∧
+     proof.attr₁ = proof.attr₂) ∨
+    PoseidonCollision F 3 ∨ PoseidonCollision F 1 ∨
+    CRHashCollision (EscrowFields F) F := by
+  obtain ⟨haccept, hno_root, hcomm, hcomm', hpred, hescrow_c, hescrow_v,
+    hnull, hholder⟩ := hverify
+  have h_ecdsa := zkEidas_no_root_implies_valid proof.gkrProof hs haccept hno_root
+  rcases escrow_integrity_or_collision proof.escrowOriginal proof.escrowDecrypted
+    proof.escrowDigestVal hescrow_c hescrow_v with h_escrow | hcol_escrow
+  · rcases predicateCommitment_binding_or_collision proof.cv proof.cv' proof.sd
+      proof.sd' proof.mh proof.mh' (hcomm.trans hcomm'.symm) with
+      h_pred_bind | hcol3
+    · rcases nullifier_binding_or_collision proof.cred₁ proof.cred₂ proof.contract₁
+        proof.contract₂ proof.salt₁ proof.salt₂ hnull with h_null_bind | hcol3
+      · rcases holderBinding_binding_or_collision proof.attr₁ proof.attr₂ hholder
+          with h_holder_bind | hcol1
+        · left
+          exact ⟨h_ecdsa, by rwa [← h_pred_bind.1], h_escrow, h_null_bind, h_holder_bind⟩
+        · right; right; left; exact hcol1
+      · right; left; exact hcol3
+    · right; left; exact hcol3
+  · right; right; right; exact hcol_escrow

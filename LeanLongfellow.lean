@@ -37,6 +37,7 @@ import LeanLongfellow.Ligero.ColumnOpening
 import LeanLongfellow.Ligero.ColumnOpeningSoundness
 import LeanLongfellow.Ligero.ColumnTests
 import LeanLongfellow.Ligero.BlindVerifier
+import LeanLongfellow.Ligero.BlindScheme
 import LeanLongfellow.Circuit.Defs
 import LeanLongfellow.Circuit.EqPoly
 import LeanLongfellow.Circuit.Combining

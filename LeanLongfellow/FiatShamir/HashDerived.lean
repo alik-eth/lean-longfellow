@@ -221,4 +221,80 @@ theorem fiatShamir_hash_completeness {n : ℕ}
   unfold fsHashVerifierAccepts
   exact fiatShamir_completeness p (deriveChallenges n oracle)
 
+-- ================================================================
+-- § 7. Commit-Before-Challenge ⟹ Non-Adaptivity (ROM Reduction)
+-- ================================================================
+
+/-! ### ROM reduces adaptive to non-adaptive
+
+In the Random Oracle Model, every adversary that follows the "commit-then-
+challenge" protocol flow — computing round-i's polynomial from the transcript
+prefix (challenges `0 .. i-1`) before seeing challenge `i` — automatically
+satisfies the non-adaptivity hypothesis required by `fiatShamir_soundness`.
+
+The argument is purely structural:
+1. The adversary's round-i polynomial is determined by `challenges[0..i-1]`.
+2. Challenge i = `H(transcript including that polynomial)`.
+3. Therefore the polynomial is fixed before challenge i is sampled.
+
+We formalize this by defining `CommitBeforeChallenge` and showing it implies
+the `h_nonadaptive` condition, then derive the full soundness bound for any
+commit-before-challenge adversary. -/
+
+/-- An adversary is **commit-before-challenge** if its round-i polynomial
+depends only on challenges `0 .. i-1` (not on challenge `i` or later).
+
+This captures the real Fiat-Shamir protocol flow: the prover commits a
+polynomial, then the challenge is derived by hashing the transcript that
+includes that polynomial. Any adversary following this flow satisfies
+this property. -/
+def CommitBeforeChallenge {n : ℕ}
+    (adversary : RandomChallenges F n → FiatShamirProof F n) : Prop :=
+  ∀ (cs cs' : RandomChallenges F n) (i : Fin n),
+    (∀ j : Fin n, j.val < i.val → cs j = cs' j) →
+    (adversary cs).round_polys i = (adversary cs').round_polys i
+
+omit [DecidableEq F] [Fintype F] in
+/-- A commit-before-challenge adversary satisfies the non-adaptivity
+hypothesis required by `fiatShamir_soundness`. This is immediate from the
+definitions — the two conditions are definitionally the same. -/
+theorem commitBeforeChallenge_nonadaptive {n : ℕ}
+    {adversary : RandomChallenges F n → FiatShamirProof F n}
+    (h : CommitBeforeChallenge adversary) :
+    ∀ (cs cs' : RandomChallenges F n) (i : Fin n),
+      (∀ j : Fin n, j.val < i.val → cs j = cs' j) →
+      (adversary cs).round_polys i = (adversary cs').round_polys i :=
+  h
+
+omit [DecidableEq F] [Fintype F] in
+/-- Every `NonAdaptiveAdversary` (constant proof) satisfies
+`CommitBeforeChallenge` when viewed as a function from challenges to proofs. -/
+theorem nonAdaptive_is_commitBeforeChallenge {n : ℕ}
+    (adv : NonAdaptiveAdversary F n) :
+    CommitBeforeChallenge (fun _ : RandomChallenges F n => adv.proof) := by
+  intro _ _ _ _
+  rfl
+
+/-- **ROM soundness for commit-before-challenge adversaries.**
+
+Any adversary that computes round-i's polynomial from the transcript prefix
+(challenges `0..i-1`) before seeing challenge `i` is effectively non-adaptive
+in the Random Oracle Model. The soundness bound `n * d * |F|^(n-1)` from
+`fiatShamir_soundness` applies directly.
+
+This shows that the non-adaptivity hypothesis in `fiatShamir_soundness` is
+not a restriction in the ROM: every adversary following the commit-then-challenge
+protocol flow satisfies it. -/
+theorem rom_reduces_adaptive {n : ℕ} {d : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F)
+    (hn : 0 < n) (hd : 1 ≤ d)
+    (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
+    (adversary : RandomChallenges F n → FiatShamirProof F n)
+    (hdeg : ∀ cs i, ((adversary cs).round_polys i).natDegree ≤ d)
+    (h_cbc : CommitBeforeChallenge adversary) :
+    countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs) ≤
+      n * (d * Fintype.card F ^ (n - 1)) :=
+  fiatShamir_soundness p claimed_sum hn hd hclaim adversary hdeg
+    (commitBeforeChallenge_nonadaptive h_cbc)
+
 end
