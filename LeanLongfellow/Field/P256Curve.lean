@@ -88,7 +88,39 @@ def weierstrassXCoord : Point p256WCurve → F_p256
     - **scalarMul**: takes `ℕ` and uses `AddCommGroup` scalar multiplication `n • P`.
     - **groupOrder**: the P-256 group order (distinct from the base field order `p`).
     - **fieldToNat**: `ZMod.val` — the canonical `[0, p)` representative.
-    - **xCoord**: pattern-matches on `Point.zero` / `Point.some`. -/
+    - **xCoord**: pattern-matches on `Point.zero` / `Point.some`.
+
+    Group-law proof fields are separated into opaque `theorem`s below to
+    prevent Lean from eagerly unfolding `AddCommGroup` machinery on the
+    256-bit Weierstrass curve during typeclass synthesis, which causes
+    memory blowup. -/
+
+-- Opaque proof terms — prevents Lean from reducing through
+-- AddCommGroup on the 256-bit Weierstrass curve at synthesis time.
+private theorem p256_pointAdd_identity_left :
+    ∀ P : Point p256WCurve, (Point.zero : Point p256WCurve) + P = P := zero_add
+
+private theorem p256_pointAdd_identity_right :
+    ∀ P : Point p256WCurve, P + (Point.zero : Point p256WCurve) = P := add_zero
+
+private theorem p256_scalarMul_zero :
+    ∀ P : Point p256WCurve, (0 : ℕ) • P = (Point.zero : Point p256WCurve) :=
+  fun _ => zero_nsmul _
+
+private theorem p256_scalarMul_succ :
+    ∀ (n : ℕ) (P : Point p256WCurve), (n + 1) • P = P + n • P :=
+  fun n P => succ_nsmul' P n
+
+private theorem p256_pointAdd_comm :
+    ∀ P Q : Point p256WCurve, P + Q = Q + P := add_comm
+
+private theorem p256_fieldToNat_injective :
+    Function.Injective (ZMod.val : F_p256 → ℕ) := ZMod.val_injective p256Prime
+
+private theorem p256_pointAdd_assoc :
+    ∀ P Q R : Point p256WCurve, P + Q + R = P + (Q + R) :=
+  fun P Q R => @add_assoc (Point p256WCurve) _ P Q R
+
 instance : EllipticCurve F_p256 where
   Point := Point p256WCurve
   generator := p256Generator
@@ -99,16 +131,16 @@ instance : EllipticCurve F_p256 where
   xCoord := weierstrassXCoord
   identity := Point.zero
   fieldToNat := ZMod.val
-  pointAdd_identity_left := zero_add
-  pointAdd_identity_right := add_zero
-  scalarMul_zero := fun _ => zero_nsmul _
-  scalarMul_succ := fun n P => succ_nsmul' P n
-  pointAdd_comm := add_comm
-  fieldToNat_injective := ZMod.val_injective p256Prime
+  pointAdd_identity_left := p256_pointAdd_identity_left
+  pointAdd_identity_right := p256_pointAdd_identity_right
+  scalarMul_zero := p256_scalarMul_zero
+  scalarMul_succ := p256_scalarMul_succ
+  pointAdd_comm := p256_pointAdd_comm
+  fieldToNat_injective := p256_fieldToNat_injective
 
 -- ============================================================
 -- Section 5: EllipticCurveGroup instance
 -- ============================================================
 
 instance : EllipticCurveGroup F_p256 where
-  pointAdd_assoc P Q R := @add_assoc (Point p256WCurve) _ P Q R
+  pointAdd_assoc := p256_pointAdd_assoc
