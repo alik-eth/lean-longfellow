@@ -13,6 +13,7 @@ import LeanLongfellow.FiatShamir.Soundness
 import LeanLongfellow.FiatShamir.HashDerived
 import LeanLongfellow.Ligero.Extraction
 import LeanLongfellow.ZeroKnowledge.PerfectHVZK
+import LeanLongfellow.Ligero.ECDSASoundness
 
 /-! # zk-eIDAS End-to-End Soundness
 
@@ -135,6 +136,41 @@ theorem zkEidas_no_root_implies_valid [EllipticCurveGroup F] {s NL : ℕ}
   obtain ⟨k, i, diff, hne, hdeg, heval⟩ :=
     zkEidas_soundness_det proof hs haccept hfalse
   exact hno_root k i diff hne hdeg heval
+
+-- ============================================================
+-- Section 3b: Alternative ECDSA soundness via Ligero constraints
+-- ============================================================
+
+omit [DecidableEq F] in
+/-- **Alternative ECDSA extraction via Ligero constraints.**
+
+    This provides a soundness path that does NOT use the `ecdsaCoefficient`
+    lookup table. Instead, the ECDSA verification predicate is decomposed
+    into Ligero linear constraints (input assignments, x-coordinate match)
+    and quadratic constraints (field arithmetic: s*s_inv, u1=z*s_inv,
+    u2=r*s_inv). The Ligero verifier checks these constraints
+    probabilistically. With good challenges, constraint satisfaction is
+    guaranteed, and the bridge theorem gives `ecdsaVerify`.
+
+    **Comparison with GKR path:** The GKR path uses `ecdsaCoefficient` in
+    layer 0 (embeds the answer as a lookup). The Ligero path embeds
+    `sig.s`, `z`, `sig.r` as constraint TARGETS — no Lean-level
+    conditional. Both paths are sound; the Ligero path is structurally
+    cleaner. -/
+theorem zkEidas_ligero_extraction [EllipticCurveGroup F]
+    {params : LigeroParams}
+    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    (w : Fin ecdsaWitnessSize → F)
+    (niProof : NILigeroProof F params ecdsaLinearCount ecdsaWitnessSize ecdsaQuadCount)
+    (haccept : niLigeroVerify w (ecdsaLinearConstraints F z Q sig)
+      ecdsaQuadConstraints niProof)
+    (h_lin_good : ¬ satisfiesLinear w (ecdsaLinearConstraints F z Q sig) →
+      ¬ linearTestSingleChallenge w (ecdsaLinearConstraints F z Q sig) niProof.alpha)
+    (h_quad_good : ¬ (∀ i, satisfiesQuad w (ecdsaQuadConstraints i)) →
+      ¬ quadTestSingleChallenge w ecdsaQuadConstraints niProof.u)
+    (hxcoord : w W_XCOORD_R = ecdsaRecoveryXCoord z Q sig) :
+    ecdsaVerify z Q sig :=
+  ecdsa_ligero_soundness z Q sig w niProof haccept h_lin_good h_quad_good hxcoord
 
 -- ============================================================
 -- Section 4: Predicate commitment binding

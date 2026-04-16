@@ -33,6 +33,9 @@ import LeanLongfellow.Ligero.MerkleCommitment
 import LeanLongfellow.Ligero.FiatShamir
 import LeanLongfellow.Ligero.ProbabilisticE2E
 import LeanLongfellow.Ligero.ProbabilisticLongfellow
+import LeanLongfellow.Ligero.ECDSAConstraints
+import LeanLongfellow.Ligero.ECDSABridge
+import LeanLongfellow.Ligero.ECDSASoundness
 import LeanLongfellow.Ligero.Extraction
 import LeanLongfellow.Ligero.ColumnOpening
 import LeanLongfellow.Ligero.ColumnOpeningSoundness
