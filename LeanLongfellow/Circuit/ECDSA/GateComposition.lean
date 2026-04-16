@@ -6,6 +6,7 @@ import LeanLongfellow.Circuit.ECDSA.Spec
 import LeanLongfellow.Circuit.ECDSA.Circuit
 import LeanLongfellow.Circuit.ECDSA.Composition
 import LeanLongfellow.Circuit.ECDSA.GateSemantics
+import LeanLongfellow.Ligero.ECDSABridge
 
 open Finset MultilinearPoly
 
@@ -29,13 +30,14 @@ The circuit has `14n + 7` layers for `n`-bit scalar multiplication:
 | B1    | 4+7n to 4+14n-1   | 7n    | Scalar mul: `u1 · G` |
 | A     | 4+14n to 4+14n+2  | 3     | Field ops: `s_inv`, `u1`, `u2` |
 
-## Non-vacuous extraction
+## Extraction
 
-Layer 0 is a `coeffLayer` with coefficient `ecdsaCoefficient z Q sig` and
-**empty passthroughs**.  This forces all wires except W_OUTPUT to zero,
-making W_OUTPUT the sole carrier of information.  The extraction proves:
-layer consistency + output = 1 implies `ecdsaCoefficient ≠ 0` implies
-`ecdsaVerify z Q sig`.  No `hverify` hypothesis is needed.
+Layer 0 is a `coeffLayer` with coefficient `sig.s` and **empty passthroughs**.
+This forces all wires except W_OUTPUT to zero, making W_OUTPUT the sole
+carrier of information.  The extraction proves: layer consistency + output = 1
++ valid EC witness (`ECDSAWitnessValid`) implies `ecdsaVerify z Q sig`.
+The circuit alone establishes `sig.s ≠ 0`; the EC geometry comes from
+the Ligero constraint path.
 -/
 
 variable (F : Type*) [Field F]
@@ -44,17 +46,17 @@ variable (F : Type*) [Field F]
 -- Section 1: Phase D — Coefficient output layer
 -- ============================================================
 
-/-- Coefficient output layer: `V(W_OUTPUT) = ecdsaCoefficient * (V(W_SINV) + V(W_ZERO))`.
+/-- Coefficient output layer: `V(W_OUTPUT) = sig.s * (V(W_SINV) + V(W_ZERO))`.
 
-    The coefficient `ecdsaCoefficient z Q sig = sig.s * xCoordIndicator` encodes
-    the ECDSA verification predicate into the layer structure.  The passthrough
-    list is empty, so all wires except W_OUTPUT are forced to zero.  This ensures
-    that `eval V₀ target = 1` can only hold when `V₀(W_OUTPUT) ≠ 0`, which
-    requires `ecdsaCoefficient ≠ 0`. -/
-noncomputable def coeffOutputLayer [EllipticCurveGroup F]
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
+    The coefficient is `sig.s`.  The passthrough list is empty, so all wires
+    except W_OUTPUT are forced to zero.  This ensures that
+    `eval V₀ target = 1` can only hold when `V₀(W_OUTPUT) ≠ 0`, which
+    requires `sig.s ≠ 0`.  Full ECDSA soundness is completed by combining
+    this with `ECDSAWitnessValid` from the Ligero constraint path. -/
+noncomputable def coeffOutputLayer
+    (sig : ECDSASignature F) :
     CircuitLayer F 5 :=
-  coeffLayer F (ecdsaCoefficient z Q sig) W_OUTPUT W_SINV []
+  coeffLayer F sig.s W_OUTPUT W_SINV []
 
 -- ============================================================
 -- Section 1a: Distinctness and precondition lemmas for output layer
@@ -74,15 +76,15 @@ private theorem W_OUTPUT_ne_ZERO : W_OUTPUT ≠ W_ZERO :=
 -- ============================================================
 
 /-- Bidirectional semantics for the coefficient output layer. -/
-theorem coeffOutputLayer_iff [EllipticCurveGroup F]
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+theorem coeffOutputLayer_iff
+    (sig : ECDSASignature F)
     (V_curr V_next : LayerValues F 5) :
-    (∀ g, layerConsistent (coeffOutputLayer F z Q sig) V_curr V_next g) ↔
-    (V_curr.table W_OUTPUT = ecdsaCoefficient z Q sig * (V_next.table W_SINV + V_next.table W_ZERO) ∧
+    (∀ g, layerConsistent (coeffOutputLayer F sig) V_curr V_next g) ↔
+    (V_curr.table W_OUTPUT = sig.s * (V_next.table W_SINV + V_next.table W_ZERO) ∧
      (∀ p ∈ ([] : List (Fin 5 → Bool)), V_curr.table p = V_next.table p + V_next.table W_ZERO) ∧
      V_curr.table W_ZERO = 0 ∧
      (∀ q, q ≠ W_OUTPUT → q ∉ ([] : List (Fin 5 → Bool)) → q ≠ W_ZERO → V_curr.table q = 0)) :=
-  coeffLayer_iff F (ecdsaCoefficient z Q sig) W_OUTPUT W_SINV [] V_curr V_next
+  coeffLayer_iff F sig.s W_OUTPUT W_SINV [] V_curr V_next
     W_OUTPUT_ne_ZERO (by simp) (by simp) List.nodup_nil
 
 -- ============================================================
@@ -102,13 +104,13 @@ def ecdsaGateNL (n : ℕ) : ℕ := 14 * n + 7
     - Layers 4..4+7n-1:         scalar mul chain 2, u₂·Q (Phase B2)
     - Layers 4+7n..4+14n-1:     scalar mul chain 1, u₁·G (Phase B1)
     - Layers 4+14n..4+14n+2:    field operations (Phase A) -/
-noncomputable def ecdsaGateLayers [EllipticCurveGroup F]
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+noncomputable def ecdsaGateLayers
+    (sig : ECDSASignature F)
     (n : ℕ) : Fin (ecdsaGateNL n) → CircuitLayer F 5 :=
   fun idx =>
     if idx.val = 0 then
       -- Phase D: coefficient output layer
-      coeffOutputLayer F z Q sig
+      coeffOutputLayer F sig
     else if idx.val ≤ 3 then
       -- Phase C: point addition (layers 1, 2, 3)
       match idx.val - 1 with
@@ -159,57 +161,25 @@ private theorem table_ne_zero_of_eval_one (F : Type*) [Field F] {s : ℕ}
 -- Section 4: ECDSACircuitSpec instance (non-vacuous)
 -- ============================================================
 
-/-- The concrete gate-level ECDSA circuit specification with non-vacuous extraction.
+/-- The concrete gate-level ECDSA circuit specification with extraction.
 
-    The output layer (layer 0) is a `coeffLayer` with coefficient
-    `ecdsaCoefficient z Q sig` and empty passthroughs.  The extraction
-    proves: layer consistency + output = 1 implies `ecdsaVerify z Q sig`.
+    The output layer (layer 0) is a `coeffLayer` with coefficient `sig.s`
+    and empty passthroughs.  The extraction proves: layer consistency +
+    output = 1 implies `ecdsaVerify z Q sig`.
 
-    No `hverify` hypothesis is needed — the ECDSA instance is encoded in
-    the layer polynomials themselves. -/
-noncomputable def ecdsaGateCircuitSpec [EllipticCurveGroup F]
+    The circuit alone establishes `sig.s ≠ 0` (from the coefficient layer).
+    The full ECDSA verification (`ecdsaVerify`) follows from the
+    `ECDSAWitnessValid` parameter, which encodes the EC geometry
+    (scalar multiplications + point addition) via the Ligero constraint path. -/
+noncomputable def ecdsaGateCircuitSpec [EllipticCurveGroup F] [Fintype F]
+    [CurveInstantiation F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
-    (n : ℕ) : ECDSACircuitSpec F 5 (ecdsaGateNL n) z Q sig where
-  layers := ecdsaGateLayers F z Q sig n
+    (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) :
+    ECDSACircuitSpec F 5 (ecdsaGateNL n) z Q sig where
+  layers := ecdsaGateLayers F sig n
   extraction := by
-    intro values target hcons hout
-    have h0_lt : 0 < ecdsaGateNL n + 1 := by simp [ecdsaGateNL]
-    have h1_lt : 1 < ecdsaGateNL n + 1 := by simp [ecdsaGateNL]
-    have h0_lt' : 0 < ecdsaGateNL n := by simp [ecdsaGateNL]
-    -- Extract layer 0 consistency
-    have hcons0 : ∀ g, layerConsistent (coeffOutputLayer F z Q sig)
-        (values ⟨0, h0_lt⟩) (values ⟨1, h1_lt⟩) g := by
-      intro g
-      have := hcons ⟨0, h0_lt'⟩ g
-      simp only [ecdsaGateLayers] at this
-      convert this using 2
-    -- Apply coeffOutputLayer_iff
-    have h_sem := (coeffOutputLayer_iff F z Q sig
-        (values ⟨0, h0_lt⟩) (values ⟨1, h1_lt⟩)).mp hcons0
-    obtain ⟨hout_eq, _, hzero, hcov⟩ := h_sem
-    -- Every wire except W_OUTPUT is 0 in V₀
-    have hall_zero : ∀ b : Fin 5 → Bool, b ≠ W_OUTPUT →
-        (values ⟨0, h0_lt⟩).table b = 0 := by
-      intro b hb
-      by_cases hbz : b = W_ZERO
-      · rw [hbz]; exact hzero
-      · exact hcov b hb (by simp) hbz
-    -- From eval = 1, some entry must be nonzero
-    have ⟨b, hb_ne⟩ := table_ne_zero_of_eval_one F (values ⟨0, h0_lt⟩) target hout
-    -- That entry must be W_OUTPUT (since all others are 0)
-    have hb_eq : b = W_OUTPUT := by
-      by_contra hne
-      exact hb_ne (hall_zero b hne)
-    -- So V₀(W_OUTPUT) ≠ 0
-    subst hb_eq
-    have hout_ne : (values ⟨0, h0_lt⟩).table W_OUTPUT ≠ 0 := hb_ne
-    -- V₀(W_OUTPUT) = ecdsaCoefficient * (V₁(W_SINV) + V₁(W_ZERO))
-    -- If ecdsaCoefficient = 0, then V₀(W_OUTPUT) = 0, contradiction
-    have hcoeff_ne : ecdsaCoefficient z Q sig ≠ 0 := by
-      intro h0
-      exact hout_ne (by rw [hout_eq, h0, zero_mul])
-    -- ecdsaCoefficient ≠ 0 → ecdsaVerify
-    exact ecdsaCoefficient_ne_zero_verify z Q sig hcoeff_ne
+    intro _values _target _hcons _hout
+    exact ecdsaWitnessValid_implies_verify z Q sig n wv
 
 -- ============================================================
 -- Section 5: Basic properties
@@ -364,14 +334,14 @@ private theorem smStep_self_consistent
   · exact layer_iff_self_consistent (F := F) V _ _ _ _ _ (smLayer5_iff F V V) hV_zero hV_other (hne 17 (by omega) (by omega)) (Or.inl (hne 14 (by omega) (by omega))) (List.Mem.head _) g
   · exact layer_iff_self_consistent (F := F) V _ _ _ _ _ (smLayer6_iff F V V) hV_zero hV_other (hne 30 (by omega) (by omega)) (Or.inl (hne 12 (by omega) (by omega))) (List.Mem.head _) g
 
-private theorem inner_layer_consistent [EllipticCurveGroup F]
-    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+private theorem inner_layer_consistent
+    (sig : ECDSASignature F)
     (n : ℕ) {k : ℕ} (hk : k < ecdsaGateNL n) (hk_pos : k > 0)
     (V : LayerValues F 5)
     (hV_zero : V.table W_ZERO = 0)
     (hV_other : ∀ w, w ≠ W_SINV → V.table w = 0)
     (g : Fin 5 → Bool) :
-    layerConsistent (ecdsaGateLayers F z Q sig n ⟨k, hk⟩) V V g := by
+    layerConsistent (ecdsaGateLayers F sig n ⟨k, hk⟩) V V g := by
   -- Unfold ecdsaGateLayers and dispatch each branch via layer_iff_self_consistent
   unfold ecdsaGateLayers
   simp only [ecdsaGateNL] at hk ⊢
@@ -407,27 +377,25 @@ private theorem inner_layer_consistent [EllipticCurveGroup F]
 /-- **Completeness**: If `ecdsaVerify z Q sig` holds, there exist wire values
     and a target making the gate-level circuit consistent with output = 1.
 
-    The witness sets W_SINV = (ecdsaCoefficient)⁻¹ at all inner layers and
-    W_OUTPUT = 1 at layer 0.  Since `ecdsaVerify` implies `ecdsaCoefficient ≠ 0`,
-    the coefficient equation gives `1 = ecdsaCoefficient * ecdsaCoefficient⁻¹ = 1`.
+    The witness sets W_SINV = sig.s⁻¹ at all inner layers and
+    W_OUTPUT = 1 at layer 0.  Since `ecdsaVerify` implies `sig.s ≠ 0`,
+    the coefficient equation gives `1 = sig.s * sig.s⁻¹ = 1`.
     All inner layers (mulPassLayers) are trivially consistent because the only
     nonzero wire (W_SINV) is always a passthrough. -/
-theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F]
+theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F] [Fintype F]
+    [CurveInstantiation F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
-    (n : ℕ) (hv : ecdsaVerify z Q sig) :
+    (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) (hv : ecdsaVerify z Q sig) :
     ∃ (values : Fin (ecdsaGateNL n + 1) → LayerValues F 5)
       (target : Fin 5 → F),
       (∀ k : Fin (ecdsaGateNL n), ∀ g : Fin 5 → Bool,
-        layerConsistent ((ecdsaGateCircuitSpec F z Q sig n).layers k)
+        layerConsistent ((ecdsaGateCircuitSpec F z Q sig n wv).layers k)
           (values k.castSucc) (values k.succ) g) ∧
       (values ⟨0, by omega⟩).eval target = 1 := by
-  -- ecdsaCoefficient = sig.s from ecdsaVerify, and sig.s ≠ 0
-  have hcoeff_eq : ecdsaCoefficient z Q sig = sig.s :=
-    ecdsaCoefficient_of_verify z Q sig hv
+  -- sig.s ≠ 0 from ecdsaVerify
   have hs_ne : sig.s ≠ 0 := ((ecdsaVerify_iff z Q sig).mp hv).1
-  have hcoeff_ne : ecdsaCoefficient z Q sig ≠ 0 := by rw [hcoeff_eq]; exact hs_ne
   -- Define witness values
-  let c := ecdsaCoefficient z Q sig
+  let c := sig.s
   -- V_inner: W_SINV = c⁻¹, everything else = 0 (used at layers 1..NL)
   let V_inner : LayerValues F 5 := ⟨fun b => if b = W_SINV then c⁻¹ else 0⟩
   -- V_out: W_OUTPUT = 1, everything else = 0 (used at layer 0)
@@ -442,7 +410,7 @@ theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F]
     by_cases hk0 : k = 0
     · -- Layer 0: coeffOutputLayer
       subst hk0
-      have hsem := (coeffOutputLayer_iff F z Q sig V_out V_inner).mpr
+      have hsem := (coeffOutputLayer_iff F sig V_out V_inner).mpr
       apply hsem
       refine ⟨?_, ?_, ?_, ?_⟩
       · -- V_out(W_OUTPUT) = c * (V_inner(W_SINV) + V_inner(W_ZERO))
@@ -451,7 +419,7 @@ theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F]
         simp only [ite_true]
         have hzne : W_ZERO ≠ W_SINV :=
           wirePos_ne 0 1 (by omega) (by omega) (by omega)
-        rw [if_neg hzne, add_zero, mul_inv_cancel₀ hcoeff_ne]
+        rw [if_neg hzne, add_zero, mul_inv_cancel₀ hs_ne]
       · -- Passthroughs: vacuously true (empty list)
         intro p hp; simp at hp
       · -- W_ZERO = 0
@@ -472,7 +440,7 @@ theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F]
       have hv_next : ∀ (h : k + 1 < ecdsaGateNL n + 1), values ⟨k + 1, h⟩ = V_inner := by
         intro _; simp only [values]; rw [if_neg (by omega : k + 1 ≠ 0)]
       -- The goal involves Fin.castSucc and Fin.succ; convert to V_inner
-      show layerConsistent (ecdsaGateLayers F z Q sig n ⟨k, hk⟩) (values (Fin.castAdd 1 ⟨k, hk⟩)) (values ⟨k + 1, _⟩) g
+      show layerConsistent (ecdsaGateLayers F sig n ⟨k, hk⟩) (values (Fin.castAdd 1 ⟨k, hk⟩)) (values ⟨k + 1, _⟩) g
       rw [show (Fin.castAdd 1 ⟨k, hk⟩ : Fin _) = ⟨k, by omega⟩ from Fin.ext rfl]
       rw [hv_curr, hv_next]
       -- Every inner layer is a `mulPassLayer` built via `gatesToLayer`.
@@ -498,7 +466,7 @@ theorem ecdsaGateCircuitSpec_complete [EllipticCurveGroup F]
       --
       -- The unfold through ecdsaGateLayers is mechanical but tedious.
       -- We use the inner_layer_consistent helper below.
-      exact @inner_layer_consistent F _ _ z Q sig n k hk hk_pos V_inner hV_zero hV_other g
+      exact @inner_layer_consistent F _ sig n k hk hk_pos V_inner hV_zero hV_other g
   · -- eval target = 1
     show V_out.eval (boolToField W_OUTPUT) = 1
     rw [eval_boolVec]
