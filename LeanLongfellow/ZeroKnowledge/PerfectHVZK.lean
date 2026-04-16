@@ -128,25 +128,26 @@ theorem fullLongfellow_isPerfectHVZK_fiatShamir {n : ℕ}
    fun i => simulateRounds_deg claimed_sum (deriveChallenges n oracle) i⟩
 
 -- ============================================================
--- Section 5: Combined soundness + ZK
+-- Section 5: Perfect HVZK (convenience alias)
 -- ============================================================
 
-/-- **Soundness and zero-knowledge are compatible.**
+/-- **Perfect HVZK for the full Longfellow protocol (convenience alias).**
 
-    The full Longfellow protocol simultaneously achieves:
-    - **Soundness** (from `longfellow_soundness`): a cheating prover
-      must hit a polynomial root.
-    - **Perfect HVZK** (from `fullLongfellow_isPerfectHVZK`): a
-      simulator produces valid transcripts without the witness.
+    Alias for `fullLongfellow_isPerfectHVZK`. Given a valid column-opening
+    proof, the full protocol achieves perfect HVZK: a simulator produces
+    valid degree-≤-1 transcripts without the witness.
 
-    This theorem packages both properties together, showing they
-    hold under the same protocol parameters. -/
-theorem fullLongfellow_sound_and_zk {n : ℕ}
+    Note: this theorem proves zero-knowledge only. Soundness is a separate
+    property — see `longfellow_soundness` in `Ligero/Longfellow.lean` and
+    `zkEidas_soundness_det` in `EndToEnd.lean`. The two properties operate
+    at different abstraction levels (soundness requires a witness and
+    challenges; ZK requires a column-opening proof) and are composed at the
+    protocol level in `EndToEnd.zkEidas_honest_verifier_zk`. -/
+theorem fullLongfellow_perfectHVZK {n : ℕ}
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]
     (validColProof : ColumnOpeningProof D F params d)
     (h_col_valid : columnOpeningVerify validColProof) :
-    -- ZK: a valid simulator exists with degree-bounded polynomials
     isPerfectFullHVZK F n D params d :=
   fullLongfellow_isPerfectHVZK validColProof h_col_valid
 
