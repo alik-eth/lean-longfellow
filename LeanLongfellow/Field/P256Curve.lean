@@ -1,4 +1,5 @@
-import LeanLongfellow.Circuit.ECDSA
+import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.EC.ScalarMul
 import LeanLongfellow.Field.P256
 import Mathlib.AlgebraicGeometry.EllipticCurve.Affine.Point
 
@@ -98,3 +99,13 @@ instance : EllipticCurve F_p256 where
   xCoord := weierstrassXCoord
   identity := Point.zero
   fieldToNat := ZMod.val
+
+-- ============================================================
+-- Section 5: EllipticCurveGroup instance
+-- ============================================================
+
+instance : EllipticCurveGroup F_p256 where
+  pointAdd_assoc P Q R := @add_assoc (Point p256WCurve) _ P Q R
+  pointAdd_identity_left P := @zero_add (Point p256WCurve) _ P
+  pointAdd_identity_right P := @add_zero (Point p256WCurve) _ P
+  pointAdd_comm P Q := @add_comm (Point p256WCurve) _ P Q
