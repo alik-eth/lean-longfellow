@@ -620,3 +620,111 @@ theorem zkEidasFull_soundness_or_collision {F : Type*} [Field F] [DecidableEq F]
       · right; left; exact hcol3
     · right; left; exact hcol3
   · right; right; right; exact hcol_escrow
+
+-- ============================================================
+-- Section 15: Knowledge soundness
+-- ============================================================
+
+/-- **Knowledge soundness (re-export):**
+    If the NI Ligero verifier accepts with good challenges and no sumcheck
+    challenge hits a root of a nonzero low-degree polynomial, then:
+    1. The claimed sum is correct: `claimed_sum = ∑ b, p.table b`.
+    2. The committed witness satisfies all linear and quadratic constraints.
+
+    This establishes that Longfellow is an **argument of knowledge**, not merely
+    an argument of soundness: the verifier's acceptance guarantees that the
+    prover "knows" a valid witness (the committed values themselves), and the
+    computation it encodes (the multilinear sum) is correct.
+
+    In the zk-eIDAS context, this means the prover cannot produce a convincing
+    proof without actually holding a witness that satisfies the ECDSA circuit
+    constraints (encoded as Ligero linear/quadratic constraints) and without
+    the claimed computation result being correct.
+
+    The knowledge extractor is the identity function (`ligeroExtractWitness`):
+    Ligero commits to the witness directly, so extraction is trivial in the
+    idealized model. The non-trivial content is *soundness of extraction* —
+    that the extracted witness actually satisfies all constraints.
+
+    See `Ligero/Extraction.lean` for the full extraction machinery, including
+    `NILigeroKnowledgeExtractor` and probabilistic error bounds. -/
+theorem zkEidas_knowledge_soundness [Fintype F] {n : ℕ}
+    {params : LigeroParams} {q : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F)
+    (hn : 0 < n)
+    (w : Fin (witnessSize n) → F)
+    (challenges : Fin n → F)
+    (qcs : Fin q → QuadConstraint (witnessSize n))
+    (niProof : NILigeroProof F params (n + 1) (witnessSize n) q)
+    -- NI Ligero accepted
+    (haccept : niLigeroVerify w
+      (generateAllConstraints p claimed_sum challenges) qcs niProof)
+    -- Good challenges for Ligero tests
+    (h_lin_good : ¬ satisfiesLinear w (generateAllConstraints p claimed_sum challenges) →
+      ¬ linearTestSingleChallenge w (generateAllConstraints p claimed_sum challenges)
+        niProof.alpha)
+    (h_quad_good : ¬ (∀ i, satisfiesQuad w (qcs i)) →
+      ¬ quadTestSingleChallenge w qcs niProof.u)
+    -- No sumcheck challenge hits a polynomial root
+    (hno_root : ∀ i : Fin n, ∀ diff : F[X],
+      diff ≠ 0 → diff.natDegree ≤ 1 → diff.eval (challenges i) ≠ 0) :
+    -- The claimed sum is correct
+    claimed_sum = ∑ b : Fin n → Bool, p.table b ∧
+    -- AND the extracted witness satisfies all constraints
+    satisfiesAll (ligeroExtractWitness w)
+      (generateAllConstraints p claimed_sum challenges) qcs :=
+  longfellow_knowledge_soundness_capstone p claimed_sum hn w challenges qcs
+    niProof haccept h_lin_good h_quad_good hno_root
+
+-- ============================================================
+-- Section 16: Zero-Knowledge (re-export)
+-- ============================================================
+
+/-- **Full Longfellow zero-knowledge (re-export):**
+    The full Longfellow protocol (sumcheck + Ligero column openings +
+    Merkle authentication paths) achieves perfect honest-verifier
+    zero-knowledge: there exists a simulator that produces valid
+    transcripts without access to the witness, with degree-≤-1 round
+    polynomials matching the honest prover's structural form. -/
+theorem zkEidas_perfect_hvzk
+    {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
+    [ColumnHash D F params.NROW]
+    {n : ℕ}
+    (validColProof : ColumnOpeningProof D F params d)
+    (h_col_valid : columnOpeningVerify validColProof) :
+    isPerfectFullHVZK F n D params d :=
+  fullLongfellow_isPerfectHVZK validColProof h_col_valid
+
+/-- **zk-eIDAS: Soundness + Zero-Knowledge.**
+
+    The zk-eIDAS Longfellow protocol simultaneously achieves:
+
+    1. **Soundness** — if the verifier accepts and no sumcheck
+       challenge hits a polynomial root, the ECDSA signature is valid
+       (from `zkEidas_no_root_implies_valid`).
+
+    2. **Perfect HVZK** — a simulator produces valid transcripts
+       (sumcheck + column openings + Merkle paths) without the
+       witness, using degree-≤-1 polynomials (from
+       `fullLongfellow_isPerfectHVZK`).
+
+    This theorem packages both properties, showing that the protocol
+    reveals no information about the witness beyond the validity of
+    the ECDSA signature. -/
+theorem zkEidas_honest_verifier_zk [EllipticCurveGroup F]
+    {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
+    [ColumnHash D F params.NROW]
+    {s NL : ℕ}
+    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL z Q sig)
+    (hs : 0 < 2 * s)
+    (haccept : zkEidasVerifierAccepts proof hs)
+    (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
+      ∀ diff : F[X], diff ≠ 0 → diff.natDegree ≤ 2 →
+      diff.eval ((proof.reductions k).rounds i).challenge ≠ 0)
+    (validColProof : ColumnOpeningProof D F params d)
+    (h_col_valid : columnOpeningVerify validColProof) :
+    ecdsaVerify z Q sig ∧
+    (∀ n : ℕ, isPerfectFullHVZK F n D params d) :=
+  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root,
+   fun n => fullLongfellow_isPerfectHVZK validColProof h_col_valid⟩
