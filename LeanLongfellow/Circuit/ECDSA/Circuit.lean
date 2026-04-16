@@ -104,8 +104,23 @@ def ecdsaConstraintNoInv (params : CurveParams F) (n : ℕ)
 -- ============================================================
 
 /-- Connects abstract `EllipticCurve` operations to concrete
-    `CurveParams`/`ECPoint` gadgets. The `_agree` fields are axioms
-    that would be proven when instantiating a specific curve. -/
+    `CurveParams`/`ECPoint` gadgets.
+
+    The `_agree` fields are typeclass obligations — substantive
+    correctness properties that must be PROVED for each curve
+    instantiation. For P-256, all fields are fully discharged in
+    `P256CurveInstantiation.lean` (520+ lines, zero sorry):
+    - `scalarMul_agree` — proved via `scalarMulChain_correct`
+      (induction over double-and-add steps) + `doubleAndAdd_eq_nsmul`
+    - `pointAdd_agree` — proved via Mathlib's Weierstrass addition law
+    - `doublePoint_agree` — proved via tangent-line formula
+    - `xCoord_agree`, `generator_agree` — structural mappings
+
+    These are NOT axioms in Lean's sense (`#print axioms` does not
+    flag them). They are instance fields checked at elaboration time.
+    The trust surface is the same as any typeclass instance: the proofs
+    are kernel-checked, but a new curve instantiation requires re-proving
+    all fields for that curve. -/
 class CurveInstantiation (F : Type*) [Field F] [EllipticCurveGroup F] [Fintype F] where
   /-- Underlying curve parameters. -/
   params : CurveParams F
