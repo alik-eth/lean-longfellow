@@ -90,48 +90,59 @@ theorem p256_total_sumcheck_error (card : ℕ) :
 
 /-- Concrete Longfellow error parameters for P-256 ECDSA.
 
-    All fields use literal numbers to avoid forcing Lean to evaluate
-    `Fintype.card F_p256` (which would try to compute p256Prime).
+    All counts are in the per-layer challenge space `|F|^(2s) = |F|^10`.
 
     - `num_layers`: 3591
-    - `sumcheck_error_per_layer`: `20 * |F|^9`
-    - `ligero_linear_error`: 1
-    - `ligero_quad_error`: 1
-    - `ligero_ldt_error`: 0 -/
+    - `sumcheck_error_per_layer`: `20 * |F|^9` (Schwartz-Zippel with degree 2)
+    - `ligero_linear_error`: `|F|^9` (linear test: `|F|^(m-1)/|F|^m = 1/|F|`
+      probability, lifted to `|F|^10` space gives `|F|^9` count)
+    - `ligero_quad_error`: `|F|^9` (quadratic test: same `1/|F|` probability)
+    - `ligero_ldt_error`: 0 (absorbed into simplified bound)
+
+    The Ligero tests each contribute probability `1/|F|` regardless of
+    constraint dimension `m` or `q`, because `|F|^(m-1)/|F|^m = 1/|F|`.
+    When expressed as counts in the 10-dimensional sumcheck challenge
+    space, this is `|F|^9`. -/
 def p256ErrorParams (card : ℕ) : LongfellowErrorParams where
   num_layers := p256_NL
   sumcheck_error_per_layer := 20 * card ^ 9
-  ligero_linear_error := 1
-  ligero_quad_error := 1
+  ligero_linear_error := card ^ 9
+  ligero_quad_error := card ^ 9
   ligero_ldt_error := 0
 
 -- ============================================================
 -- Section 4: Total error bound
 -- ============================================================
 
-/-- The total error count equals `71820 * card^9 + 2`. -/
+/-- The total error count equals exactly `71822 * card^9`.
+
+    Decomposition: `3591 * 20 * card^9 + card^9 + card^9 + 0`
+    `= (71820 + 1 + 1) * card^9 = 71822 * card^9`. -/
 theorem p256ErrorParams_total (card : ℕ) :
-    (p256ErrorParams card).total = 71820 * card ^ 9 + 2 := by
+    (p256ErrorParams card).total = 71822 * card ^ 9 := by
   simp [LongfellowErrorParams.total, p256ErrorParams, p256_NL]
   ring
 
 /-- **Concrete P-256 soundness error bound.**
 
 The total error count for the Longfellow verifier with the P-256 ECDSA
-circuit is at most `71822 * card^9`.
+circuit is exactly `71822 * card^9` in the per-layer `|F|^10` challenge
+space. This decomposes as:
+- `71820 * card^9` from 3591 sumcheck layers (each contributing `20 * card^9`)
+- `card^9` from the Ligero linear test (`1/|F|` probability)
+- `card^9` from the Ligero quadratic test (`1/|F|` probability)
 
-Total = `71820 * card^9 + 2 <= 71822 * card^9` (for card ≥ 1). -/
-theorem p256ErrorParams_total_le (card : ℕ) (hcard : 0 < card) :
-    (p256ErrorParams card).total ≤ 71822 * card ^ 9 := by
-  rw [p256ErrorParams_total]
-  have h1 : 1 ≤ card ^ 9 := Nat.one_le_pow 9 _ hcard
-  omega
+Dividing by the challenge space `card^10` gives probability
+`71822 / card = 71822 / p256Prime < 2^{-238}`. -/
+theorem p256ErrorParams_total_le (card : ℕ) :
+    (p256ErrorParams card).total = 71822 * card ^ 9 :=
+  p256ErrorParams_total card
 
 /-- Specialization to the actual P-256 field cardinality. -/
-theorem p256ErrorParams_total_le_concrete :
-    (p256ErrorParams (Fintype.card F_p256)).total ≤
+theorem p256ErrorParams_total_concrete :
+    (p256ErrorParams (Fintype.card F_p256)).total =
     71822 * Fintype.card F_p256 ^ 9 :=
-  p256ErrorParams_total_le _ Fintype.card_pos
+  p256ErrorParams_total _
 
 -- ============================================================
 -- Section 5: Security level analysis
@@ -157,11 +168,11 @@ Combining the error bound with the field size:
 - Since `71822 < 2^17` and `|F| = p256Prime > 2^255`,
   the probability is `< 2^17 / 2^255 = 2^{-238}`. -/
 theorem p256_security_level :
-    (p256ErrorParams (Fintype.card F_p256)).total ≤
+    (p256ErrorParams (Fintype.card F_p256)).total =
       71822 * Fintype.card F_p256 ^ 9 ∧
     71822 < 2 ^ 17 ∧
     2 ^ 255 < p256Prime :=
-  ⟨p256ErrorParams_total_le_concrete, p256_numerator_lt_pow17, p256Prime_gt_pow255⟩
+  ⟨p256ErrorParams_total_concrete, p256_numerator_lt_pow17, p256Prime_gt_pow255⟩
 
 -- ============================================================
 -- Section 6: Connection to abstract composition theorem
@@ -179,9 +190,7 @@ theorem p256_composition_consistent (card : ℕ) :
 
 /-- Concrete bound in terms of the P-256 prime (fully numeric). -/
 theorem p256_error_bound_numeric :
-    (p256ErrorParams (Fintype.card F_p256)).total ≤ 71822 * p256Prime ^ 9 := by
-  calc (p256ErrorParams (Fintype.card F_p256)).total
-      ≤ 71822 * Fintype.card F_p256 ^ 9 := p256ErrorParams_total_le_concrete
-    _ = 71822 * p256Prime ^ 9 := by rw [p256_card]
+    (p256ErrorParams (Fintype.card F_p256)).total = 71822 * p256Prime ^ 9 := by
+  rw [p256ErrorParams_total_concrete, p256_card]
 
 end
