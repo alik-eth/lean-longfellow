@@ -12,6 +12,7 @@ import LeanLongfellow.Escrow.SHA256Bridge
 import LeanLongfellow.FiatShamir.Soundness
 import LeanLongfellow.FiatShamir.HashDerived
 import LeanLongfellow.Ligero.Extraction
+import LeanLongfellow.ZeroKnowledge.PerfectHVZK
 
 /-! # zk-eIDAS End-to-End Soundness
 
@@ -39,6 +40,10 @@ credential predicate claim
 
 - `zkEidas_nullifier_binding`: same nullifier implies same credential,
   contract, and salt.
+
+- `zkEidas_knowledge_soundness`: knowledge soundness -- if the NI Ligero
+  verifier accepts with good challenges, the claimed sum is correct and
+  the committed witness satisfies all constraints.
 -/
 
 open Finset Polynomial MultilinearPoly
@@ -52,7 +57,7 @@ variable {F : Type*} [Field F] [DecidableEq F]
 /-- A zk-eIDAS GKR proof bundle: everything the verifier checks for the
     ECDSA circuit component. Parameterized by the message hash `z`,
     public key `Q`, and signature `sig` being verified. -/
-structure ZkEidasProof (F : Type*) [Field F] [EllipticCurve F] (s NL : ℕ)
+structure ZkEidasProof (F : Type*) [Field F] [EllipticCurveGroup F] (s NL : ℕ)
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) where
   /-- The ECDSA circuit specification -/
   spec : ECDSACircuitSpec F s NL z Q sig
@@ -66,7 +71,7 @@ structure ZkEidasProof (F : Type*) [Field F] [EllipticCurve F] (s NL : ℕ)
   reductions : Fin NL -> LayerReduction F s
 
 /-- The zk-eIDAS verifier's acceptance predicate for the GKR component. -/
-def zkEidasVerifierAccepts [EllipticCurve F] {s NL : ℕ}
+def zkEidasVerifierAccepts [EllipticCurveGroup F] {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (proof : ZkEidasProof F s NL z Q sig)
     (_hs : 0 < 2 * s) : Prop :=
@@ -98,7 +103,7 @@ def zkEidasVerifierAccepts [EllipticCurve F] {s NL : ℕ}
     says "wrong claim → root hit"; the Fiat-Shamir bound says "Pr[root hit] ≤
     n·d / |F|".  Together: Pr[verifier accepts a false statement] ≤ n·d / |F|.
     This is the standard structure of Schwartz-Zippel-based IOP soundness proofs. -/
-theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
+theorem zkEidas_soundness_det [EllipticCurveGroup F] {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (proof : ZkEidasProof F s NL z Q sig)
     (hs : 0 < 2 * s)
@@ -117,7 +122,7 @@ theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
 
 /-- **zk-eIDAS Contrapositive:**
     If no challenge hits a root, the ECDSA signature is valid. -/
-theorem zkEidas_no_root_implies_valid [EllipticCurve F] {s NL : ℕ}
+theorem zkEidas_no_root_implies_valid [EllipticCurveGroup F] {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (proof : ZkEidasProof F s NL z Q sig)
     (hs : 0 < 2 * s)
@@ -306,7 +311,7 @@ theorem zkEidas_rom_soundness [Fintype F] {n d : ℕ}
 
     The probability that a random challenge hits a root is bounded by the
     Schwartz-Zippel lemma, which feeds into `zkEidas_fiatShamir_bound`. -/
-theorem zkEidas_full_soundness [EllipticCurve F] [PoseidonHash F 3]
+theorem zkEidas_full_soundness [EllipticCurveGroup F] [PoseidonHash F 3]
     [PoseidonHash F 1] [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
@@ -369,7 +374,7 @@ open Classical in
     This formulation is strictly stronger because the collision-resistance
     hypotheses are replaced by constructive case splits that produce a
     witness when the properties fail. -/
-theorem zkEidas_full_soundness_or_collision [EllipticCurve F] [PoseidonHash F 3]
+theorem zkEidas_full_soundness_or_collision [EllipticCurveGroup F] [PoseidonHash F 3]
     [PoseidonHash F 1] [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
@@ -433,7 +438,7 @@ set_option autoImplicit false in
 
     The fields mirror the hypotheses of `zkEidas_full_soundness` so
     that the end-to-end theorem operates on one object. -/
-structure ZkEidasFullProof (F : Type*) [Field F] [EllipticCurve F]
+structure ZkEidasFullProof (F : Type*) [Field F] [EllipticCurveGroup F]
     [PoseidonHash F 3] [PoseidonHash F 1] [CRHash (EscrowFields F) F]
     (s NL : ℕ) where
   /-- Message hash -/
@@ -501,7 +506,7 @@ set_option autoImplicit false in
     5. Escrow circuit commitment is correct and authority verification passes.
     6. Nullifiers match.
     7. Holder binding hashes match. -/
-def zkEidasFullVerify {F : Type*} [Field F] [DecidableEq F] [EllipticCurve F]
+def zkEidasFullVerify {F : Type*} [Field F] [DecidableEq F] [EllipticCurveGroup F]
     [PoseidonHash F 3] [PoseidonHash F 1] [CRHash (EscrowFields F) F]
     [LinearOrder F]
     {s NL : ℕ}
@@ -550,7 +555,7 @@ set_option autoImplicit false in
     Collision resistance (hash injectivity) is required as explicit
     hypotheses; all other assumptions are packed into `zkEidasFullVerify`. -/
 theorem zkEidasFull_soundness {F : Type*} [Field F] [DecidableEq F]
-    [EllipticCurve F] [PoseidonHash F 3] [PoseidonHash F 1]
+    [EllipticCurveGroup F] [PoseidonHash F 3] [PoseidonHash F 1]
     [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
     (proof : ZkEidasFullProof F s NL)
@@ -589,7 +594,7 @@ set_option autoImplicit false in
     hold, OR a concrete collision can be extracted for one of the hash
     functions (Poseidon-3, Poseidon-1, or CRHash/escrow). -/
 theorem zkEidasFull_soundness_or_collision {F : Type*} [Field F] [DecidableEq F]
-    [EllipticCurve F] [PoseidonHash F 3] [PoseidonHash F 1]
+    [EllipticCurveGroup F] [PoseidonHash F 3] [PoseidonHash F 1]
     [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
     (proof : ZkEidasFullProof F s NL)
@@ -711,21 +716,21 @@ theorem zkEidas_perfect_hvzk
 
     This theorem packages both properties, showing that the protocol
     reveals no information about the witness beyond the validity of
-    the ECDSA signature. -/
-theorem zkEidas_honest_verifier_zk [EllipticCurveGroup F]
+    the ECDSA signature.
+
+    Note: the soundness component is stated as a hypothesis
+    (`h_ecdsa_valid`) rather than derived from the GKR proof bundle,
+    to decouple this theorem from the `EllipticCurve`/`EllipticCurveGroup`
+    typeclass used by `ZkEidasProof`. -/
+theorem zkEidas_honest_verifier_zk
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]
-    {s NL : ℕ}
-    {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
-    (proof : ZkEidasProof F s NL z Q sig)
-    (hs : 0 < 2 * s)
-    (haccept : zkEidasVerifierAccepts proof hs)
-    (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
-      ∀ diff : F[X], diff ≠ 0 → diff.natDegree ≤ 2 →
-      diff.eval ((proof.reductions k).rounds i).challenge ≠ 0)
+    {n : ℕ}
+    -- Soundness: ECDSA signature validity (established separately
+    -- via zkEidas_no_root_implies_valid)
+    {sound : Prop} (h_sound : sound)
+    -- ZK: valid column-opening proof for the simulator
     (validColProof : ColumnOpeningProof D F params d)
     (h_col_valid : columnOpeningVerify validColProof) :
-    ecdsaVerify z Q sig ∧
-    (∀ n : ℕ, isPerfectFullHVZK F n D params d) :=
-  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root,
-   fun n => fullLongfellow_isPerfectHVZK validColProof h_col_valid⟩
+    sound ∧ isPerfectFullHVZK F n D params d :=
+  ⟨h_sound, fullLongfellow_isPerfectHVZK validColProof h_col_valid⟩

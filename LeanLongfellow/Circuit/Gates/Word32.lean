@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Gadgets
+import LeanLongfellow.Circuit.Gates.Gadgets
 
 open Finset
 

@@ -83,6 +83,8 @@ import LeanLongfellow.Poseidon.HolderBinding
 import LeanLongfellow.Poseidon.Concrete
 import LeanLongfellow.ZeroKnowledge.Defs
 import LeanLongfellow.ZeroKnowledge.HVZK
+import LeanLongfellow.ZeroKnowledge.FullSim
+import LeanLongfellow.ZeroKnowledge.PerfectHVZK
 import LeanLongfellow.EndToEnd
 import LeanLongfellow.P256EndToEnd
 import LeanLongfellow.ConcreteP256Bound

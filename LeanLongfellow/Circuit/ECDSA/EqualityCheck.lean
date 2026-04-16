@@ -1,6 +1,6 @@
-import LeanLongfellow.Circuit.Gates
-import LeanLongfellow.Circuit.GadgetGates
-import LeanLongfellow.Circuit.ECDSAFieldOps
+import LeanLongfellow.Circuit.Gates.Defs
+import LeanLongfellow.Circuit.Gates.GadgetGates
+import LeanLongfellow.Circuit.ECDSA.FieldOps
 
 open Finset MultilinearPoly
 

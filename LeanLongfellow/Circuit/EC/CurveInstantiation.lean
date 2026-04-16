@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.ECBridge
+import LeanLongfellow.Circuit.EC.Bridge
 import LeanLongfellow.Field.P256Curve
 
 /-! # P-256 Curve Instantiation: Circuit EC ops ↔ Concrete EllipticCurve

@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.SHA256
+import LeanLongfellow.Circuit.SHA256.Compression
 import Mathlib.Data.Matrix.Notation
 
 /-! # NIST FIPS 180-4 Constants for SHA-256

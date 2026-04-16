@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Combining
+import LeanLongfellow.Circuit.Core.Combining
 import LeanLongfellow.Sumcheck.Soundness
 
 open Finset Polynomial MultilinearPoly

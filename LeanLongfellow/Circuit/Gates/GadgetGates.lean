@@ -1,7 +1,7 @@
-import LeanLongfellow.Circuit.Gates
-import LeanLongfellow.Circuit.Gadgets
-import LeanLongfellow.Circuit.Word32
-import LeanLongfellow.Circuit.Examples
+import LeanLongfellow.Circuit.Gates.Defs
+import LeanLongfellow.Circuit.Gates.Gadgets
+import LeanLongfellow.Circuit.Gates.Word32
+import LeanLongfellow.Circuit.Gates.Examples
 
 open Finset MultilinearPoly
 

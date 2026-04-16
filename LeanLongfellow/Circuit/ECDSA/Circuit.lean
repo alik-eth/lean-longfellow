@@ -1,5 +1,5 @@
-import LeanLongfellow.Circuit.ECDSA
-import LeanLongfellow.Circuit.ECArith
+import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.EC.Arith
 
 /-! # Concrete ECDSA Verification Circuit
 
@@ -81,7 +81,7 @@ def ecdsaConstraint (params : CurveParams F) (n : ℕ)
 /-- Connects abstract `EllipticCurve` operations to concrete
     `CurveParams`/`ECPoint` gadgets. The `_agree` fields are axioms
     that would be proven when instantiating a specific curve. -/
-class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] [Fintype F] where
+class CurveInstantiation (F : Type*) [Field F] [EllipticCurveGroup F] [Fintype F] where
   /-- Underlying curve parameters. -/
   params : CurveParams F
   /-- The generator as an ECPoint. -/
@@ -132,7 +132,7 @@ class CurveInstantiation (F : Type*) [Field F] [EllipticCurve F] [Fintype F] whe
 /-- If the ECDSA constraint system is satisfied, then the abstract
     `ecdsaVerify` predicate holds. This provides the soundness-relevant
     extraction direction for `ECDSACircuitSpec`. -/
-theorem ecdsaConstraint_implies_verify [ec : EllipticCurve F] [Fintype F]
+theorem ecdsaConstraint_implies_verify [ec : EllipticCurveGroup F] [Fintype F]
     [inst : CurveInstantiation F]
     (n : ℕ) (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (wit : ECDSAWitness F n)

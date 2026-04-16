@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Defs
+import LeanLongfellow.Circuit.Core.Defs
 
 open Finset MultilinearPoly
 

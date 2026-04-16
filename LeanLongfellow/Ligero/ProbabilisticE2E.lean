@@ -1,7 +1,7 @@
 import LeanLongfellow.FiatShamir.Oracle
 import LeanLongfellow.FiatShamir.Soundness
 import LeanLongfellow.Ligero.FiatShamir
-import LeanLongfellow.Circuit.Probability
+import LeanLongfellow.Circuit.Core.Probability
 
 open Finset
 

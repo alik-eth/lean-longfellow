@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.ECArith
+import LeanLongfellow.Circuit.EC.Arith
 import Mathlib.AlgebraicGeometry.EllipticCurve.Affine.Formula
 
 /-! # Bridge: EC Gadgets ↔ Mathlib Weierstrass Curve Formulas

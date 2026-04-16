@@ -99,6 +99,12 @@ instance : EllipticCurve F_p256 where
   xCoord := weierstrassXCoord
   identity := Point.zero
   fieldToNat := ZMod.val
+  pointAdd_identity_left := zero_add
+  pointAdd_identity_right := add_zero
+  scalarMul_zero := fun _ => zero_nsmul _
+  scalarMul_succ := fun n P => succ_nsmul' P n
+  pointAdd_comm := add_comm
+  fieldToNat_injective := ZMod.val_injective p256Prime
 
 -- ============================================================
 -- Section 5: EllipticCurveGroup instance
@@ -106,6 +112,3 @@ instance : EllipticCurve F_p256 where
 
 instance : EllipticCurveGroup F_p256 where
   pointAdd_assoc P Q R := @add_assoc (Point p256WCurve) _ P Q R
-  pointAdd_identity_left P := @zero_add (Point p256WCurve) _ P
-  pointAdd_identity_right P := @add_zero (Point p256WCurve) _ P
-  pointAdd_comm P Q := @add_comm (Point p256WCurve) _ P Q

@@ -1,9 +1,9 @@
-import LeanLongfellow.Circuit.ECDSA
-import LeanLongfellow.Circuit.ECDSACircuit
-import LeanLongfellow.Circuit.ECDSAFieldOps
-import LeanLongfellow.Circuit.ECDSAPointOps
-import LeanLongfellow.Circuit.ECDSAEqualityCheck
-import LeanLongfellow.Circuit.ScalarMul
+import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.ECDSA.Circuit
+import LeanLongfellow.Circuit.ECDSA.FieldOps
+import LeanLongfellow.Circuit.ECDSA.PointOps
+import LeanLongfellow.Circuit.ECDSA.EqualityCheck
+import LeanLongfellow.Circuit.EC.ScalarMul
 
 open Finset MultilinearPoly
 
@@ -49,7 +49,7 @@ variable {F : Type*} [Field F]
 
 /-- The ECDSA recovery point R = u₁·G + u₂·Q where u₁ = z·s⁻¹ mod n,
     u₂ = r·s⁻¹ mod n, with arithmetic in `ZMod groupOrder`. -/
-noncomputable def ecdsaRecoveryPoint [ec : EllipticCurve F]
+noncomputable def ecdsaRecoveryPoint [ec : EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     EllipticCurve.Point (F := F) :=
   let n := ec.groupOrder
@@ -65,12 +65,12 @@ noncomputable def ecdsaRecoveryPoint [ec : EllipticCurve F]
     (EllipticCurve.scalarMul (ZMod.val u₂) Q)
 
 /-- The x-coordinate of the recovery point. -/
-noncomputable def ecdsaRecoveryXCoord [EllipticCurve F]
+noncomputable def ecdsaRecoveryXCoord [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) : F :=
   EllipticCurve.xCoord (ecdsaRecoveryPoint z Q sig)
 
 /-- `ecdsaVerify` unfolds to `sig.s ≠ 0 ∧ ecdsaRecoveryXCoord z Q sig = sig.r`. -/
-theorem ecdsaVerify_iff [EllipticCurve F]
+theorem ecdsaVerify_iff [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     ecdsaVerify z Q sig ↔
     sig.s ≠ 0 ∧ ecdsaRecoveryXCoord z Q sig = sig.r := by
@@ -83,29 +83,29 @@ theorem ecdsaVerify_iff [EllipticCurve F]
 
 open Classical in
 /-- The indicator for the x-coordinate check: 1 if xCoord(R) = sig.r, 0 otherwise. -/
-noncomputable def xCoordIndicator [EllipticCurve F]
+noncomputable def xCoordIndicator [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) : F :=
   if ecdsaRecoveryXCoord z Q sig = sig.r then 1 else 0
 
 /-- The coefficient: `sig.s * xCoordIndicator`. -/
-noncomputable def ecdsaCoefficient [EllipticCurve F]
+noncomputable def ecdsaCoefficient [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) : F :=
   sig.s * xCoordIndicator z Q sig
 
-theorem ecdsaCoefficient_ne_zero_s [EllipticCurve F]
+theorem ecdsaCoefficient_ne_zero_s [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (h : ecdsaCoefficient z Q sig ≠ 0) : sig.s ≠ 0 := by
   intro hs; apply h; unfold ecdsaCoefficient; rw [hs, zero_mul]
 
 open Classical in
-theorem ecdsaCoefficient_ne_zero_xcoord [EllipticCurve F]
+theorem ecdsaCoefficient_ne_zero_xcoord [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (h : ecdsaCoefficient z Q sig ≠ 0) :
     ecdsaRecoveryXCoord z Q sig = sig.r := by
   by_contra hne; apply h
   unfold ecdsaCoefficient xCoordIndicator; rw [if_neg hne, mul_zero]
 
-theorem ecdsaCoefficient_ne_zero_verify [EllipticCurve F]
+theorem ecdsaCoefficient_ne_zero_verify [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (h : ecdsaCoefficient z Q sig ≠ 0) :
     ecdsaVerify z Q sig := by
@@ -114,7 +114,7 @@ theorem ecdsaCoefficient_ne_zero_verify [EllipticCurve F]
          ecdsaCoefficient_ne_zero_xcoord z Q sig h⟩
 
 open Classical in
-theorem ecdsaCoefficient_of_verify [EllipticCurve F]
+theorem ecdsaCoefficient_of_verify [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (hv : ecdsaVerify z Q sig) :
     ecdsaCoefficient z Q sig = sig.s := by
@@ -130,7 +130,7 @@ private def targetTriple : Fin (3 * 1) → Bool := concat3 wire0 wire0 wire1
 
 /-- The single circuit layer for the non-vacuous ECDSA circuit.
     `add_poly` has one nonzero entry at `targetTriple` with value `ecdsaCoefficient`. -/
-noncomputable def ecdsaRealLayer [EllipticCurve F]
+noncomputable def ecdsaRealLayer [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     CircuitLayer F 1 where
   add_poly := ⟨fun glr =>
@@ -226,7 +226,7 @@ private theorem concat3_ne_tt_of_ne_lr₀ (lr : Fin (2 * 1) → Bool) (hlr : lr 
 -- ============================================================
 
 /-- Wire 1 is uncovered: V_curr(wire1) = 0. -/
-private theorem ecdsaRealLayer_wire1_zero [EllipticCurve F]
+private theorem ecdsaRealLayer_wire1_zero [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (V_curr V_next : LayerValues F 1)
     (hcons : ∀ g, layerConsistent (ecdsaRealLayer z Q sig) V_curr V_next g) :
@@ -240,7 +240,7 @@ private theorem ecdsaRealLayer_wire1_zero [EllipticCurve F]
   simp [hne]
 
 /-- The consistency equation at wire0. -/
-private theorem ecdsaRealLayer_wire0_eq [EllipticCurve F]
+private theorem ecdsaRealLayer_wire0_eq [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (V_curr V_next : LayerValues F 1)
     (hcons : ∀ g, layerConsistent (ecdsaRealLayer z Q sig) V_curr V_next g) :
@@ -286,7 +286,7 @@ private theorem eval_one_wire0_ne_zero (p : MultilinearPoly F 1)
     `ecdsaCoefficient ≠ 0`, which implies `ecdsaVerify z Q sig`.
 
     **Completeness:** see `ecdsaCircuitSpec_complete`. -/
-noncomputable def ecdsaCircuitSpec [EllipticCurve F]
+noncomputable def ecdsaCircuitSpec [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     ECDSACircuitSpec F 1 1 z Q sig where
   layers := fun _ => ecdsaRealLayer z Q sig
@@ -310,7 +310,7 @@ noncomputable def ecdsaCircuitSpec [EllipticCurve F]
 
 /-- Helper: the layerConsistent equation for a specific (V_out, V_in, g) at wire0
     in the ecdsaRealLayer, with V_out(wire0) = coeff * (V_in(wire0) + V_in(wire1)). -/
-private theorem ecdsaRealLayer_consistency_wire0 [EllipticCurve F]
+private theorem ecdsaRealLayer_consistency_wire0 [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (V_out V_in : LayerValues F 1)
     (h : V_out.table wire0 =
@@ -337,7 +337,7 @@ private theorem ecdsaRealLayer_consistency_wire0 [EllipticCurve F]
 
 /-- **Completeness:** If `ecdsaVerify z Q sig` holds, there exist wire
     values making the circuit consistent with output evaluating to 1. -/
-theorem ecdsaCircuitSpec_complete [EllipticCurve F]
+theorem ecdsaCircuitSpec_complete [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (hv : ecdsaVerify z Q sig) :
     ∃ (values : Fin 2 → LayerValues F 1),
@@ -381,7 +381,7 @@ theorem ecdsaCircuitSpec_complete [EllipticCurve F]
 -- ============================================================
 
 /-- The extraction property holds. -/
-theorem ecdsaCircuitSpec_sound [EllipticCurve F]
+theorem ecdsaCircuitSpec_sound [EllipticCurveGroup F]
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (values : Fin 2 → LayerValues F 1) (target : Fin 1 → F)
     (hcons : ∀ k : Fin 1, ∀ g : Fin 1 → Bool,
@@ -397,7 +397,7 @@ theorem ecdsaCircuitSpec_sound [EllipticCurve F]
 
 /-- If the GKR verifier accepts but ECDSA doesn't verify, a sumcheck
     challenge hit a root. -/
-theorem ecdsaComposition_longfellow_soundness [DecidableEq F] [EllipticCurve F]
+theorem ecdsaComposition_longfellow_soundness [DecidableEq F] [EllipticCurveGroup F]
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (values : Fin 2 → LayerValues F 1)
     (targets : Fin 1 → (Fin 1 → F))

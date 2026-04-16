@@ -11,8 +11,9 @@ guarantees the signature is valid — or a sumcheck challenge hit a root.
 
 This is a **pure specification** — no concrete curve arithmetic, no
 circuit construction. The `ECDSACircuitSpec` structure axiomatizes
-the extraction property of a correct ECDSA circuit; building a
-concrete instance is future work.
+the extraction property of a correct ECDSA circuit.  Concrete instances
+with proven extraction are provided in `Composition.lean` (s=1, NL=1)
+and `GateComposition.lean` (s=5, NL=14n+7).
 -/
 
 -- ============================================================
@@ -46,20 +47,27 @@ class EllipticCurve (F : Type*) [Field F] where
       For `ZMod p` this is `ZMod.val`. Used to coerce base-field values into
       the scalar field `ZMod groupOrder` for ECDSA arithmetic. -/
   fieldToNat : F → ℕ
+  /-- Point addition with identity (left). -/
+  pointAdd_identity_left : ∀ P : Point, pointAdd identity P = P
+  /-- Point addition with identity (right). -/
+  pointAdd_identity_right : ∀ P : Point, pointAdd P identity = P
+  /-- Scalar multiplication base case. -/
+  scalarMul_zero : ∀ P : Point, scalarMul 0 P = identity
+  /-- Scalar multiplication inductive step. -/
+  scalarMul_succ : ∀ (n : ℕ) (P : Point), scalarMul (n + 1) P = pointAdd P (scalarMul n P)
+  /-- Point addition is commutative. -/
+  pointAdd_comm : ∀ P Q : Point, pointAdd P Q = pointAdd Q P
+  /-- fieldToNat is injective (faithful representation). -/
+  fieldToNat_injective : Function.Injective fieldToNat
 
-/-- The `EllipticCurve` class extended with group-law axioms needed
-    for the scalar multiplication proof.  These axioms are satisfied
-    by any `AddCommGroup` with `nsmul` — in particular, by Mathlib's
-    `WeierstrassCurve.Affine.Point`. -/
+/-- The `EllipticCurve` class extended with associativity, needed for
+    the scalar multiplication proof.  The other group-law axioms
+    (identity, commutativity) now live in `EllipticCurve` itself.
+    Associativity is the remaining axiom satisfied by any `AddCommGroup`
+    — in particular, by Mathlib's `WeierstrassCurve.Affine.Point`. -/
 class EllipticCurveGroup (F : Type*) [Field F] extends EllipticCurve F where
   /-- Point addition is associative. -/
   pointAdd_assoc : ∀ (P Q R : Point), pointAdd (pointAdd P Q) R = pointAdd P (pointAdd Q R)
-  /-- Identity is a left identity for pointAdd. -/
-  pointAdd_identity_left : ∀ (P : Point), pointAdd identity P = P
-  /-- Identity is a right identity for pointAdd. -/
-  pointAdd_identity_right : ∀ (P : Point), pointAdd P identity = P
-  /-- pointAdd is commutative. -/
-  pointAdd_comm : ∀ (P Q : Point), pointAdd P Q = pointAdd Q P
 
 -- ============================================================
 -- Section 2: ECDSA verification predicate
@@ -79,7 +87,7 @@ variable {F : Type*} [Field F]
     The scalars `u₁`, `u₂` are computed in `ZMod groupOrder` (the
     curve's group order), NOT in the base field `F`. For P-256,
     `p ≠ n`, so computing inverses in `F` would be incorrect. -/
-def ecdsaVerify [ec : EllipticCurve F] (z : F) (Q : EllipticCurve.Point (F := F))
+def ecdsaVerify [ec : EllipticCurveGroup F] (z : F) (Q : EllipticCurve.Point (F := F))
     (sig : ECDSASignature F) : Prop :=
   sig.s ≠ 0 ∧
   let n := ec.groupOrder
@@ -109,7 +117,7 @@ def ecdsaVerify [ec : EllipticCurve F] (z : F) (Q : EllipticCurve.Point (F := F)
     The circuit is parameterized by `(z, Q, sig)` because a real verification
     circuit encodes the specific values being checked. This allows non-vacuous
     extraction: for a valid signature, the circuit CAN output `1`. -/
-structure ECDSACircuitSpec (F : Type*) [Field F] [EllipticCurve F]
+structure ECDSACircuitSpec (F : Type*) [Field F] [EllipticCurveGroup F]
     (s NL : ℕ) (z : F) (Q : EllipticCurve.Point (F := F))
     (sig : ECDSASignature F) where
   /-- The circuit layers. -/
@@ -128,7 +136,7 @@ structure ECDSACircuitSpec (F : Type*) [Field F] [EllipticCurve F]
 -- Section 4: End-to-end theorems
 -- ============================================================
 
-variable [DecidableEq F] [EllipticCurve F]
+variable [DecidableEq F] [EllipticCurveGroup F]
 
 omit [DecidableEq F] in
 /-- **ECDSA circuit extraction:** if a correct ECDSA circuit has all

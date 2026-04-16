@@ -1,5 +1,5 @@
-import LeanLongfellow.Circuit.Defs
-import LeanLongfellow.Circuit.EqPoly
+import LeanLongfellow.Circuit.Core.Defs
+import LeanLongfellow.Circuit.Core.EqPoly
 
 open Finset MultilinearPoly
 

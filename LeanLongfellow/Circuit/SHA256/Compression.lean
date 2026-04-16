@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.SHA256Round
+import LeanLongfellow.Circuit.SHA256.Round
 import Mathlib.Tactic.FinCases
 
 open Finset

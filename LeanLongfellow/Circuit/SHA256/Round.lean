@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Word32
+import LeanLongfellow.Circuit.Gates.Word32
 
 open Finset
 

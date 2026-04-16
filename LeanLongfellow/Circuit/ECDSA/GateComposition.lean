@@ -1,10 +1,10 @@
-import LeanLongfellow.Circuit.GateCircuit
-import LeanLongfellow.Circuit.ECDSAGateFieldOps
-import LeanLongfellow.Circuit.ECDSAGateScalarMul
-import LeanLongfellow.Circuit.ECDSAGatePointAdd
-import LeanLongfellow.Circuit.ECDSA
-import LeanLongfellow.Circuit.ECDSACircuit
-import LeanLongfellow.Circuit.ECDSAComposition
+import LeanLongfellow.Circuit.Gates.GateCircuit
+import LeanLongfellow.Circuit.ECDSA.GateFieldOps
+import LeanLongfellow.Circuit.ECDSA.GateScalarMul
+import LeanLongfellow.Circuit.ECDSA.GatePointAdd
+import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.ECDSA.Circuit
+import LeanLongfellow.Circuit.ECDSA.Composition
 
 open Finset MultilinearPoly
 
@@ -50,7 +50,7 @@ variable (F : Type*) [Field F]
     list is empty, so all wires except W_OUTPUT are forced to zero.  This ensures
     that `eval V₀ target = 1` can only hold when `V₀(W_OUTPUT) ≠ 0`, which
     requires `ecdsaCoefficient ≠ 0`. -/
-noncomputable def coeffOutputLayer [EllipticCurve F]
+noncomputable def coeffOutputLayer [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F) :
     CircuitLayer F 5 :=
   coeffLayer F (ecdsaCoefficient z Q sig) W_OUTPUT W_SINV []
@@ -73,7 +73,7 @@ private theorem W_OUTPUT_ne_ZERO : W_OUTPUT ≠ W_ZERO :=
 -- ============================================================
 
 /-- Bidirectional semantics for the coefficient output layer. -/
-theorem coeffOutputLayer_iff [EllipticCurve F]
+theorem coeffOutputLayer_iff [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (V_curr V_next : LayerValues F 5) :
     (∀ g, layerConsistent (coeffOutputLayer F z Q sig) V_curr V_next g) ↔
@@ -101,7 +101,7 @@ def ecdsaGateNL (n : ℕ) : ℕ := 14 * n + 7
     - Layers 4..4+7n-1:         scalar mul chain 2, u₂·Q (Phase B2)
     - Layers 4+7n..4+14n-1:     scalar mul chain 1, u₁·G (Phase B1)
     - Layers 4+14n..4+14n+2:    field operations (Phase A) -/
-noncomputable def ecdsaGateLayers [EllipticCurve F]
+noncomputable def ecdsaGateLayers [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (n : ℕ) : Fin (ecdsaGateNL n) → CircuitLayer F 5 :=
   fun idx =>
@@ -166,7 +166,7 @@ private theorem table_ne_zero_of_eval_one (F : Type*) [Field F] {s : ℕ}
 
     No `hverify` hypothesis is needed — the ECDSA instance is encoded in
     the layer polynomials themselves. -/
-noncomputable def ecdsaGateCircuitSpec [EllipticCurve F]
+noncomputable def ecdsaGateCircuitSpec [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (n : ℕ) : ECDSACircuitSpec F 5 (ecdsaGateNL n) z Q sig where
   layers := ecdsaGateLayers F z Q sig n

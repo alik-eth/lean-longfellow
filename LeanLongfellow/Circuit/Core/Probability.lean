@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Composition
+import LeanLongfellow.Circuit.Core.Composition
 import LeanLongfellow.FiatShamir.Soundness
 
 open Finset Polynomial MultilinearPoly Classical

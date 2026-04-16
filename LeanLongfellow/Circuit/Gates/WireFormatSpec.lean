@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.WireFormat
+import LeanLongfellow.Circuit.Gates.WireFormat
 
 set_option autoImplicit false
 

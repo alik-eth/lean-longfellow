@@ -101,7 +101,7 @@ theorem nsmulEC_add [EllipticCurveGroup F] (m n : ℕ) (P : EllipticCurve.Point 
     nsmulEC (m + n) P = EllipticCurve.pointAdd (nsmulEC m P) (nsmulEC n P) := by
   induction m with
   | zero =>
-    simp [nsmulEC_zero, EllipticCurveGroup.pointAdd_identity_left]
+    simp [nsmulEC_zero, EllipticCurve.pointAdd_identity_left]
   | succ m ih =>
     rw [show m + 1 + n = (m + n) + 1 by omega]
     rw [nsmulEC_succ, ih, nsmulEC_succ]
@@ -136,7 +136,7 @@ theorem doubleAndAdd_eq_nsmul [EllipticCurveGroup F]
     case isTrue _hbit =>
       rw [hdouble, show 2 * k + 1 = (2 * k) + 1 from rfl]
       rw [nsmulEC_succ]
-      rw [EllipticCurveGroup.pointAdd_comm]
+      rw [EllipticCurve.pointAdd_comm]
     case isFalse _hbit =>
       simp [hdouble]
 
@@ -288,7 +288,7 @@ theorem chainBitsToBool_agree (n : ℕ) (scalar_bits : Fin n → F)
 -- ============================================================
 
 /-- Auxiliary: the chain invariant holds at every step k ≤ n. -/
-private theorem scalarMulChain_invariant [EllipticCurve F] [Fintype F] [inst : CurveInstantiation F]
+private theorem scalarMulChain_invariant [EllipticCurveGroup F] [Fintype F] [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
     (hP : P = inst.toECPoint P_abs)
@@ -398,7 +398,7 @@ private theorem scalarMulChain_invariant [EllipticCurve F] [Fintype F] [inst : C
        (via `CurveInstantiation.doublePoint_agree` and `identity_toECPoint`)
     2. The conditional add produces the correct next accumulator
        (via `CurveInstantiation.pointAdd_agree`) -/
-theorem scalarMulChain_matches_doubleAndAdd [EllipticCurve F] [Fintype F]
+theorem scalarMulChain_matches_doubleAndAdd [EllipticCurveGroup F] [Fintype F]
     [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
@@ -451,7 +451,7 @@ theorem doubleAndAdd_from_bitDecomp [EllipticCurveGroup F]
     This is the theorem that `CurveInstantiation.scalarMul_agree` would
     invoke to justify its claim that the chain computes the correct scalar
     multiple. -/
-theorem scalarMulChain_correct [EllipticCurve F] [Fintype F] [inst : CurveInstantiation F]
+theorem scalarMulChain_correct [EllipticCurveGroup F] [Fintype F] [inst : CurveInstantiation F]
     (n : ℕ) (scalar_bits : Fin n → F) (P : ECPoint F)
     (P_abs : EllipticCurve.Point (F := F))
     (hP : P = inst.toECPoint P_abs)
@@ -546,7 +546,7 @@ theorem scalarMulChain_double_fin (params : CurveParams F) (n : ℕ)
 
     The proof is identical to the private `scalarMulChain_invariant`; only
     the packaging of hypotheses differs. -/
-theorem scalarMulChain_invariant_explicit [EllipticCurve F]
+theorem scalarMulChain_invariant_explicit [EllipticCurveGroup F]
     (params : CurveParams F)
     (toECPoint : EllipticCurve.Point (F := F) → ECPoint F)
     (identity_toECPoint : toECPoint EllipticCurve.identity = ⟨0, 0, 1⟩)

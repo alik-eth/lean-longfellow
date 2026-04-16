@@ -1,6 +1,6 @@
-import LeanLongfellow.Circuit.CurveInstantiation
-import LeanLongfellow.Circuit.ECDSACircuit
-import LeanLongfellow.Circuit.ScalarMul
+import LeanLongfellow.Circuit.EC.CurveInstantiation
+import LeanLongfellow.Circuit.ECDSA.Circuit
+import LeanLongfellow.Circuit.EC.ScalarMul
 
 /-! # Concrete P-256 CurveInstantiation
 

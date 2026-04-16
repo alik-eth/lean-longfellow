@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Reduction
+import LeanLongfellow.Circuit.Core.Reduction
 
 open Finset MultilinearPoly Polynomial
 

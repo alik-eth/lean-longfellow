@@ -1,5 +1,5 @@
-import LeanLongfellow.Circuit.GateCircuit
-import LeanLongfellow.Circuit.ECArith
+import LeanLongfellow.Circuit.Gates.GateCircuit
+import LeanLongfellow.Circuit.EC.Arith
 
 open Finset MultilinearPoly
 

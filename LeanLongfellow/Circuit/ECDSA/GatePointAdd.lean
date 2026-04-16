@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.GateCircuit
+import LeanLongfellow.Circuit.Gates.GateCircuit
 
 open Finset MultilinearPoly
 

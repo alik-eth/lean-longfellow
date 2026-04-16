@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.SHA256Spec
+import LeanLongfellow.Circuit.SHA256.Spec
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Linarith

@@ -1,5 +1,5 @@
 import LeanLongfellow.Escrow.Defs
-import LeanLongfellow.Circuit.SHA256
+import LeanLongfellow.Circuit.SHA256.Compression
 
 /-! # SHA-256 Bridge for Escrow Digest
 

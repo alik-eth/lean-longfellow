@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Gadgets
+import LeanLongfellow.Circuit.Gates.Gadgets
 import Mathlib.Tactic.LinearCombination
 
 /-! # Elliptic Curve Arithmetic Gadgets for ECDSA Circuit Verification
