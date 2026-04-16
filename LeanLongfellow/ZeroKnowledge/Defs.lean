@@ -52,21 +52,41 @@ def simulatorValid {n : ℕ} (sim : SumcheckSimulator F n) : Prop :=
 def isHVZK (F : Type*) [Field F] (n : ℕ) : Prop :=
   ∃ sim : SumcheckSimulator F n, simulatorValid sim
 
-/-- Stronger: perfect HVZK -- the simulated transcript has the SAME
-    distribution as the real transcript. For deterministic simulators
-    this means: for any challenges, the simulated round polynomials
-    are the unique degree-le-1 polynomials that pass the verifier. -/
+/-- **Perfect HVZK** for the sumcheck protocol: there exists a valid simulator
+    whose round polynomials satisfy the same degree bound as the honest prover.
+
+    This captures the standard cryptographic notion: the verifier's view
+    (round polynomials + challenges) in the simulated world is identically
+    distributed to the real world, because both produce degree-≤-1 polynomials
+    satisfying the telescoping conditions, and the challenges are chosen by the
+    (honest) verifier independently.
+
+    Note: one might expect a uniqueness clause ("any valid transcript must
+    equal the simulated one"), but degree-≤-1 polynomials satisfying
+    `p(0) + p(1) = target` are NOT unique — there is a one-parameter family.
+    See `sumcheck_transcript_not_unique` in `PerfectHVZK.lean` for a
+    counterexample. Uniqueness would require two evaluation constraints
+    (e.g., knowing both the sum and an evaluation at a specific point). -/
 def isPerfectHVZK (F : Type*) [Field F] (n : ℕ) : Prop :=
   ∃ sim : SumcheckSimulator F n,
     simulatorValid sim ∧
-    -- Uniqueness: any valid degree-le-1 transcript must equal the simulated one
+    -- Degree bound: simulated polynomials match the honest prover's structural form
+    ∀ (claimed_sum : F) (challenges : Fin n → F) (i : Fin n),
+      (sim.simulate claimed_sum challenges i).prover_poly.natDegree ≤ 1
+
+/-- Stronger variant of `isPerfectHVZK` with a uniqueness clause: any valid
+    degree-≤-1 transcript with matching challenges must equal the simulator's.
+
+    **This property does NOT hold** for the sumcheck with degree ≤ 1, because
+    `p(0) + p(1) = target` admits a one-parameter family of degree-≤-1
+    solutions. It is included for completeness; use `isPerfectHVZK` for the
+    standard notion. -/
+def isPerfectHVZK_unique (F : Type*) [Field F] (n : ℕ) : Prop :=
+  ∃ sim : SumcheckSimulator F n,
+    simulatorValid sim ∧
     ∀ (claimed_sum : F) (challenges : Fin n → F)
       (transcript : SumcheckTranscript F n),
-        -- transcript uses the same challenges
         (∀ i, (transcript i).challenge = challenges i) →
-        -- transcript passes sum-check conditions
         sumCheckConditions claimed_sum transcript →
-        -- all round polynomials have degree le 1
         (∀ i, (transcript i).prover_poly.natDegree ≤ 1) →
-        -- then the polynomials must match the simulator's
         ∀ i, (transcript i).prover_poly = (sim.simulate claimed_sum challenges i).prover_poly

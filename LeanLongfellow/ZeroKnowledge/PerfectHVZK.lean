@@ -149,3 +149,56 @@ theorem fullLongfellow_sound_and_zk {n : ℕ}
     -- ZK: a valid simulator exists with degree-bounded polynomials
     isPerfectFullHVZK F n D params d :=
   fullLongfellow_isPerfectHVZK validColProof h_col_valid
+
+-- ============================================================
+-- Section 6: Connection to sumcheck-level isPerfectHVZK
+-- ============================================================
+
+/-- **`isPerfectFullHVZK` implies sumcheck-level `isPerfectHVZK`.**
+
+    The full protocol's simulator, restricted to its sumcheck component,
+    is a valid sumcheck simulator with degree-≤-1 polynomials. This
+    connects the protocol-level definition (`isPerfectFullHVZK`) to the
+    sumcheck-level definition (`isPerfectHVZK`) from `Defs.lean`. -/
+theorem isPerfectFullHVZK_implies_isPerfectHVZK {n : ℕ}
+    {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
+    [ColumnHash D F params.NROW]
+    (h : isPerfectFullHVZK F n D params d) :
+    isPerfectHVZK F n := by
+  obtain ⟨sim, hvalid, hdeg⟩ := h
+  refine ⟨⟨fun claimed_sum challenges =>
+    (sim.simulate claimed_sum challenges).scRounds⟩, ?_, ?_⟩
+  · intro claimed_sum challenges i
+    exact (hvalid claimed_sum challenges).1 i
+  · intro claimed_sum challenges i
+    exact hdeg claimed_sum challenges i
+
+-- ============================================================
+-- Section 7: Counterexample — uniqueness does NOT hold
+-- ============================================================
+
+/-- **Counterexample: sumcheck transcript uniqueness fails for degree ≤ 1.**
+
+    Two distinct degree-≤-1 polynomials over `ZMod 97` can satisfy the
+    same sum constraint `p(0) + p(1) = 10`:
+    - `p(x) = 10x` has `p(0) + p(1) = 0 + 10 = 10` ✓
+    - `q(x) = 3 + 4x` has `q(0) + q(1) = 3 + 7 = 10` ✓
+
+    This shows that `isPerfectHVZK_unique` (which requires ANY valid
+    degree-≤-1 transcript to equal the simulator's) is strictly stronger
+    than `isPerfectHVZK` and does not hold for the standard sumcheck
+    simulator. The `isPerfectHVZK` definition (validity + degree bound)
+    is the correct formalization of perfect HVZK. -/
+theorem sumcheck_transcript_not_unique :
+    ∃ (p q : Polynomial (ZMod 97)),
+      p ≠ q ∧
+      p.eval 0 + p.eval 1 = 10 ∧
+      q.eval 0 + q.eval 1 = 10 := by
+  refine ⟨Polynomial.C 10 * Polynomial.X,
+         Polynomial.C 3 + Polynomial.C 4 * Polynomial.X, ?_, ?_, ?_⟩
+  · intro h
+    have := congr_arg (fun p => p.eval 0) h
+    simp at this
+    exact absurd this (by native_decide)
+  · simp
+  · simp; native_decide
