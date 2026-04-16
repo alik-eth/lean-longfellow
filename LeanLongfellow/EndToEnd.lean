@@ -10,6 +10,7 @@ import LeanLongfellow.Escrow.Defs
 import LeanLongfellow.Escrow.Correctness
 import LeanLongfellow.Escrow.SHA256Bridge
 import LeanLongfellow.FiatShamir.Soundness
+import LeanLongfellow.FiatShamir.HashDerived
 
 /-! # zk-eIDAS End-to-End Soundness
 
@@ -239,6 +240,42 @@ theorem zkEidas_fiatShamir_bound [Fintype F] {n d : ℕ}
     countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs) ≤
       n * (d * Fintype.card F ^ (n - 1)) :=
   fiatShamir_soundness p claimed_sum hn hd hclaim adversary hdeg h_nonadaptive
+
+-- ============================================================
+-- Section 8b: Hash-derived Fiat-Shamir bound (ROM)
+-- ============================================================
+
+open Classical in
+/-- **Hash-derived Fiat-Shamir bound (re-export):**
+    For a non-adaptive adversary with degree-≤-d round polynomials and a
+    wrong claimed sum, the count of bad challenge vectors is at most
+    `n * d * |F|^(n-1)` — even when challenges are derived from a random
+    oracle via hashing. -/
+theorem zkEidas_fiatShamir_hash_bound [Fintype F] {n d : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F)
+    (hn : 0 < n) (hd : 1 ≤ d)
+    (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
+    (adv : NonAdaptiveAdversary F n)
+    (hdeg : ∀ i, (adv.proof.round_polys i).natDegree ≤ d) :
+    countSat (fun cs : RandomChallenges F n =>
+      fsVerifierAccepts p claimed_sum adv.proof cs) ≤
+      n * (d * Fintype.card F ^ (n - 1)) :=
+  fiatShamir_hash_soundness p claimed_sum hn hd hclaim adv hdeg
+
+open Classical in
+/-- **ROM soundness for commit-before-challenge adversaries (re-export):**
+    Any adversary following the commit-then-challenge protocol flow satisfies
+    the non-adaptivity hypothesis. The soundness bound applies directly. -/
+theorem zkEidas_rom_soundness [Fintype F] {n d : ℕ}
+    (p : MultilinearPoly F n) (claimed_sum : F)
+    (hn : 0 < n) (hd : 1 ≤ d)
+    (hclaim : claimed_sum ≠ ∑ b : Fin n → Bool, p.table b)
+    (adversary : RandomChallenges F n → FiatShamirProof F n)
+    (hdeg : ∀ cs i, ((adversary cs).round_polys i).natDegree ≤ d)
+    (h_cbc : CommitBeforeChallenge adversary) :
+    countSat (fun cs => fsVerifierAccepts p claimed_sum (adversary cs) cs) ≤
+      n * (d * Fintype.card F ^ (n - 1)) :=
+  rom_reduces_adaptive p claimed_sum hn hd hclaim adversary hdeg h_cbc
 
 -- ============================================================
 -- Section 9: Full composition narrative
