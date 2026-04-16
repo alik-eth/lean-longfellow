@@ -1,5 +1,5 @@
-import LeanLongfellow.Circuit.ECArith
-import LeanLongfellow.Circuit.ECDSACircuit
+import LeanLongfellow.Circuit.EC.Arith
+import LeanLongfellow.Circuit.ECDSA.Circuit
 
 /-! # Scalar Multiplication Circuit: Specification and Correctness
 
@@ -82,20 +82,6 @@ theorem doubleAndAdd_succ [EllipticCurve F] {n : ℕ}
 -- ============================================================
 -- Section 3: doubleAndAdd = nsmul (abstract correctness)
 -- ============================================================
-
-/-- The `EllipticCurve` class extended with group-law axioms needed
-    for the scalar multiplication proof.  These axioms are satisfied
-    by any `AddCommGroup` with `nsmul` — in particular, by Mathlib's
-    `WeierstrassCurve.Affine.Point`. -/
-class EllipticCurveGroup (F : Type*) [Field F] extends EllipticCurve F where
-  /-- Point addition is associative. -/
-  pointAdd_assoc : ∀ (P Q R : Point), pointAdd (pointAdd P Q) R = pointAdd P (pointAdd Q R)
-  /-- Identity is a left identity for pointAdd. -/
-  pointAdd_identity_left : ∀ (P : Point), pointAdd identity P = P
-  /-- Identity is a right identity for pointAdd. -/
-  pointAdd_identity_right : ∀ (P : Point), pointAdd P identity = P
-  /-- pointAdd is commutative. -/
-  pointAdd_comm : ∀ (P Q : Point), pointAdd P Q = pointAdd Q P
 
 /-- `nsmulEC n P` computes `n`-fold addition of `P` using the `EllipticCurveGroup`
     operations.  This avoids the need for `HSMul ℕ Point` instances. -/

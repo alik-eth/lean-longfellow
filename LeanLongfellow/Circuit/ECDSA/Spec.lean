@@ -1,4 +1,4 @@
-import LeanLongfellow.Circuit.Composition
+import LeanLongfellow.Circuit.Core.Composition
 import Mathlib.Data.ZMod.Basic
 
 open Finset Polynomial MultilinearPoly
@@ -46,6 +46,20 @@ class EllipticCurve (F : Type*) [Field F] where
       For `ZMod p` this is `ZMod.val`. Used to coerce base-field values into
       the scalar field `ZMod groupOrder` for ECDSA arithmetic. -/
   fieldToNat : F → ℕ
+
+/-- The `EllipticCurve` class extended with group-law axioms needed
+    for the scalar multiplication proof.  These axioms are satisfied
+    by any `AddCommGroup` with `nsmul` — in particular, by Mathlib's
+    `WeierstrassCurve.Affine.Point`. -/
+class EllipticCurveGroup (F : Type*) [Field F] extends EllipticCurve F where
+  /-- Point addition is associative. -/
+  pointAdd_assoc : ∀ (P Q R : Point), pointAdd (pointAdd P Q) R = pointAdd P (pointAdd Q R)
+  /-- Identity is a left identity for pointAdd. -/
+  pointAdd_identity_left : ∀ (P : Point), pointAdd identity P = P
+  /-- Identity is a right identity for pointAdd. -/
+  pointAdd_identity_right : ∀ (P : Point), pointAdd P identity = P
+  /-- pointAdd is commutative. -/
+  pointAdd_comm : ∀ (P Q : Point), pointAdd P Q = pointAdd Q P
 
 -- ============================================================
 -- Section 2: ECDSA verification predicate
