@@ -74,6 +74,31 @@ def ecdsaConstraint (params : CurveParams F) (n : ℕ)
   wit.R.is_inf = 0 ∧
   wit.R.x = r
 
+/-- `ecdsaConstraint` without the invertibility check (`isNonzero s s_inv`).
+    The invertibility (`sig.s ≠ 0`) is derived from the circuit's output layer
+    and passed as a separate hypothesis to the extraction theorem. -/
+def ecdsaConstraintNoInv (params : CurveParams F) (n : ℕ)
+    (z : F) (G Q_pub : ECPoint F) (r _s : F)
+    (wit : ECDSAWitness F n) : Prop :=
+  -- 2-3. Compute u1, u2 (connect witness values)
+  wit.u1 = z * wit.s_inv ∧
+  wit.u2 = r * wit.s_inv ∧
+  -- 4. P1 = u1 · G (scalar multiplication)
+  isBitDecomp wit.u1_bits wit.u1 ∧
+  ecScalarMulChain params n wit.u1_bits G
+    wit.G_intermediates wit.G_doubled wit.G_double_lambdas wit.G_add_lambdas ∧
+  wit.P1 = wit.G_intermediates ⟨n, by omega⟩ ∧
+  -- 5. P2 = u2 · Q (scalar multiplication)
+  isBitDecomp wit.u2_bits wit.u2 ∧
+  ecScalarMulChain params n wit.u2_bits Q_pub
+    wit.Q_intermediates wit.Q_doubled wit.Q_double_lambdas wit.Q_add_lambdas ∧
+  wit.P2 = wit.Q_intermediates ⟨n, by omega⟩ ∧
+  -- 6. R = P1 + P2
+  ecAddFull params wit.P1 wit.P2 wit.R wit.final_lambda ∧
+  -- 7. x-coordinate check
+  wit.R.is_inf = 0 ∧
+  wit.R.x = r
+
 -- ============================================================
 -- Section 2: Bridge between abstract and concrete curve
 -- ============================================================
@@ -191,6 +216,69 @@ theorem ecdsaConstraint_implies_verify [ec : EllipticCurveGroup F] [Fintype F]
   -- We bridge via h_u1_bridge, h_u2_bridge: fieldToNat wit.u1 = ZMod.val(z_n * s_n⁻¹)
   -- and similarly for u2. Since hP1/hP2 give wit.P1/P2 in terms of fieldToNat wit.u1/u2,
   -- we can rewrite to match the scalar-field computation.
+  conv_lhs => rw [show EllipticCurve.scalarMul
+    (ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)) EllipticCurve.generator =
+    EllipticCurve.scalarMul (ec.fieldToNat wit.u1) EllipticCurve.generator from by
+      rw [h_u1_bridge]]
+  conv_lhs => rw [show EllipticCurve.scalarMul
+    (ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)) Q =
+    EllipticCurve.scalarMul (ec.fieldToNat wit.u2) Q from by
+      rw [h_u2_bridge]]
+  rw [inst.xCoord_agree, ← hR, h_xr]
+
+/-- Variant of `ecdsaConstraint_implies_verify` that takes `sig.s ≠ 0` as a
+    separate hypothesis instead of deriving it from `isNonzero` inside the
+    constraint.  This allows the circuit's output layer to supply the
+    invertibility proof, making the extraction genuinely load-bearing. -/
+theorem ecdsaConstraintNoInv_implies_verify [ec : EllipticCurveGroup F] [Fintype F]
+    [inst : CurveInstantiation F]
+    (n : ℕ) (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    (wit : ECDSAWitness F n)
+    (hn : 2 ^ n ≤ Fintype.card F)
+    (hs_ne : sig.s ≠ 0)
+    (h_u1_bridge : ec.fieldToNat wit.u1 =
+      ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
+        ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹))
+    (h_u2_bridge : ec.fieldToNat wit.u2 =
+      ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
+        ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹))
+    (hcon : ecdsaConstraintNoInv inst.params n z
+      inst.generatorPoint (inst.toECPoint Q)
+      sig.r sig.s wit) :
+    ecdsaVerify z Q sig := by
+  obtain ⟨h_u1, h_u2, h_u1bits, h_smG, h_P1, h_u2bits, h_smQ, h_P2,
+          h_add, h_notinf, h_xr⟩ := hcon
+  -- P1 = scalarMul u1 G  (using generator_agree to bridge)
+  have hsmG' : ecScalarMulChain inst.params n wit.u1_bits
+      (inst.toECPoint EllipticCurve.generator) wit.G_intermediates
+      wit.G_doubled wit.G_double_lambdas wit.G_add_lambdas := by
+    rwa [inst.generator_agree]
+  have hP1 : wit.P1 = inst.toECPoint
+      (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u1) EllipticCurve.generator) := by
+    rw [h_P1]
+    exact inst.scalarMul_agree wit.u1 EllipticCurve.generator n
+      wit.u1_bits wit.G_intermediates wit.G_doubled
+      wit.G_double_lambdas wit.G_add_lambdas hn h_u1bits hsmG'
+  -- P2 = scalarMul u2 Q
+  have hP2 : wit.P2 = inst.toECPoint
+      (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u2) Q) := by
+    rw [h_P2]
+    exact inst.scalarMul_agree wit.u2 Q n
+      wit.u2_bits wit.Q_intermediates wit.Q_doubled
+      wit.Q_double_lambdas wit.Q_add_lambdas hn h_u2bits h_smQ
+  -- R = pointAdd P1 P2
+  have hR : wit.R = inst.toECPoint
+      (EllipticCurve.pointAdd
+        (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u1) EllipticCurve.generator)
+        (EllipticCurve.scalarMul (EllipticCurve.fieldToNat wit.u2) Q)) := by
+    rw [hP1, hP2] at h_add
+    exact inst.pointAdd_agree _ _ wit.R wit.final_lambda h_add
+  -- Unfold ecdsaVerify and prove both conjuncts
+  unfold ecdsaVerify
+  refine ⟨hs_ne, ?_⟩
+  simp only
   conv_lhs => rw [show EllipticCurve.scalarMul
     (ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
       ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)) EllipticCurve.generator =

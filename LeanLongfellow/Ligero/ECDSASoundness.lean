@@ -56,9 +56,9 @@ theorem ecdsa_ligero_soundness [EllipticCurveGroup F]
 theorem ecdsa_ligero_soundness_structural [EllipticCurveGroup F] [Fintype F]
     [CurveInstantiation F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
-    (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) :
+    (n : ℕ) (hs_ne : sig.s ≠ 0) (wv : ECDSAWitnessValid F z Q sig n) :
     ecdsaVerify z Q sig :=
-  ecdsaWitnessValid_implies_verify z Q sig n wv
+  ecdsaWitnessValid_implies_verify z Q sig n hs_ne wv
 
 -- ============================================================
 -- Section 2: Error bound

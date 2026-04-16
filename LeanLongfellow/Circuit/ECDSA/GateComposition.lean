@@ -178,8 +178,36 @@ noncomputable def ecdsaGateCircuitSpec [EllipticCurveGroup F] [Fintype F]
     ECDSACircuitSpec F 5 (ecdsaGateNL n) z Q sig where
   layers := ecdsaGateLayers F sig n
   extraction := by
-    intro _values _target _hcons _hout
-    exact ecdsaWitnessValid_implies_verify z Q sig n wv
+    intro values target hcons hout
+    -- Derive sig.s ≠ 0 from the circuit's coefficient output layer.
+    -- Layer 0 is coeffLayer with coefficient sig.s and empty passthroughs.
+    -- If eval = 1, some table entry is nonzero.  All entries except W_OUTPUT
+    -- are forced to zero by the layer semantics, so V₀(W_OUTPUT) ≠ 0.
+    -- Since V₀(W_OUTPUT) = sig.s * (...), we get sig.s ≠ 0.
+    have hNL : 0 < ecdsaGateNL n := by unfold ecdsaGateNL; omega
+    have hcons0 : ∀ g, layerConsistent (ecdsaGateLayers F sig n ⟨0, hNL⟩)
+        (values ⟨0, by omega⟩) (values ⟨1, by omega⟩) g := by
+      intro g; exact hcons ⟨0, hNL⟩ g
+    have hlayer0 : ecdsaGateLayers F sig n ⟨0, hNL⟩ = coeffOutputLayer F sig := by
+      unfold ecdsaGateLayers; simp
+    rw [hlayer0] at hcons0
+    have hsem := (coeffOutputLayer_iff F sig
+        (values ⟨0, by omega⟩) (values ⟨1, by omega⟩)).mp hcons0
+    obtain ⟨h_output, _, h_zero, h_uncov⟩ := hsem
+    have ⟨b, hb⟩ := table_ne_zero_of_eval_one F (values ⟨0, by omega⟩) target hout
+    have h_output_ne : (values ⟨0, by omega⟩).table W_OUTPUT ≠ 0 := by
+      intro h_eq
+      apply hb
+      by_cases hb_out : b = W_OUTPUT
+      · rw [hb_out]; exact h_eq
+      · by_cases hb_zero : b = W_ZERO
+        · rw [hb_zero]; exact h_zero
+        · exact h_uncov b hb_out (by simp) hb_zero
+    have hs_ne : sig.s ≠ 0 := by
+      intro h_s_zero
+      apply h_output_ne
+      rw [h_output, h_s_zero, zero_mul]
+    exact ecdsaWitnessValid_implies_verify z Q sig n hs_ne wv
 
 -- ============================================================
 -- Section 5: Basic properties

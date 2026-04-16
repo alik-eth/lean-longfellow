@@ -127,8 +127,8 @@ structure ECDSAWitnessValid (F : Type*) [Field F]
   wit : ECDSAWitness F n
   /-- Bit length is sufficient for the field. -/
   hn : 2 ^ n ≤ Fintype.card F
-  /-- The circuit constraint system is satisfied. -/
-  constraint_sat : ecdsaConstraint CurveInstantiation.params n z
+  /-- The circuit constraint system is satisfied (without invertibility check). -/
+  constraint_sat : ecdsaConstraintNoInv CurveInstantiation.params n z
     CurveInstantiation.generatorPoint (CurveInstantiation.toECPoint Q)
     sig.r sig.s wit
   /-- Decomposed scalar computation with explicit modular reductions. -/
