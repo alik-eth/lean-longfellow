@@ -11,6 +11,7 @@ import LeanLongfellow.Escrow.Correctness
 import LeanLongfellow.Escrow.SHA256Bridge
 import LeanLongfellow.FiatShamir.Soundness
 import LeanLongfellow.FiatShamir.HashDerived
+import LeanLongfellow.Ligero.Extraction
 
 /-! # zk-eIDAS End-to-End Soundness
 
