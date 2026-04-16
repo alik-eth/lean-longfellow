@@ -113,6 +113,14 @@ theorem ecdsaCoefficient_ne_zero_verify [EllipticCurveGroup F]
   exact ⟨ecdsaCoefficient_ne_zero_s z Q sig h,
          ecdsaCoefficient_ne_zero_xcoord z Q sig h⟩
 
+section PedagogicalToyCircuit
+/-! ### Pedagogical 1-layer circuit (NL=1, s=1)
+
+    This is the simplest working example of an `ECDSACircuitSpec` instance.
+    It demonstrates non-vacuous extraction with a single layer.
+    It is NOT used in the end-to-end proof chain — see
+    `GateComposition.lean` for the gate-level circuit (NL=14n+7, s=5). -/
+
 open Classical in
 theorem ecdsaCoefficient_of_verify [EllipticCurveGroup F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
@@ -418,3 +426,5 @@ theorem ecdsaComposition_longfellow_soundness [DecidableEq F] [EllipticCurveGrou
       diff.eval ((reductions k).rounds i).challenge = 0 :=
   ecdsa_longfellow_soundness (ecdsaCircuitSpec z Q sig) values targets
     claimed_vals reductions (by omega) (by omega) hcons haccept hdeg hclaim hfalse
+
+end PedagogicalToyCircuit
