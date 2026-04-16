@@ -8,7 +8,7 @@ This project produces the first mechanized soundness proof for any Longfellow co
 
 ## Main Results
 
-The capstone theorems `zkEidas_full_soundness` and `zkEidasFull_soundness` ([EndToEnd.lean](LeanLongfellow/EndToEnd.lean)) compose all five security properties. The latter operates on a unified `ZkEidasFullProof` structure that bundles all proof data (GKR + predicate + escrow + nullifier + holder) into a single object with a single verifier `zkEidasFullVerify`:
+The capstone theorems `zkEidas_full_soundness` and `zkEidasFull_soundness` ([EndToEnd.lean](LeanLongfellow/EndToEnd.lean)) compose all five security properties. A P-256-specific variant `zkEidas_p256_soundness_or_collision` ([P256EndToEnd.lean](LeanLongfellow/P256EndToEnd.lean)) eliminates the abstract `[EllipticCurve F]` parameter, speaking directly about NIST P-256 with group laws proved via Mathlib. The unified `ZkEidasFullProof` structure bundles all proof data (GKR + predicate + escrow + nullifier + holder) into a single object with a single verifier `zkEidasFullVerify`:
 
 1. **ECDSA soundness** — if no sumcheck challenge hits a polynomial root, the ECDSA signature is valid (from GKR composition + Schwartz-Zippel)
 2. **Predicate binding** — any alternative claim matching the same Poseidon commitment satisfies the predicate (from collision resistance, non-trivially via commitment binding)
@@ -18,9 +18,15 @@ The capstone theorems `zkEidas_full_soundness` and `zkEidasFull_soundness` ([End
 
 A strictly stronger variant `zkEidas_full_soundness_or_collision` removes all hash injectivity hypotheses. Its conclusion is a disjunction: either all five properties hold, or a concrete collision witness can be extracted for Poseidon-3, Poseidon-1, or CRHash. This makes the theorem **non-vacuous for finite fields**, where `Function.Injective (F^n → F)` is unsatisfiable by cardinality.
 
+Beyond soundness, the formalization proves:
+
+6. **Knowledge soundness** — if the Ligero verifier accepts with good challenges, a knowledge extractor recovers a valid witness satisfying all constraints (`longfellow_knowledge_soundness_capstone` in [Extraction.lean](LeanLongfellow/Ligero/Extraction.lean)). The extractor uses RS decoding from the committed tableau. Error bound: `≤ 2/|F|`.
+7. **Perfect HVZK** — the full Longfellow protocol (sumcheck + Ligero column openings + Merkle paths) achieves perfect honest-verifier zero-knowledge with statistical distance 0 (`fullLongfellow_isPerfectHVZK` in [PerfectHVZK.lean](LeanLongfellow/ZeroKnowledge/PerfectHVZK.lean)). The simulator constructs its own column-opening proof from scratch via `simulateColumnOpening`.
+8. **Concrete P-256 security bound** — for the 3591-layer P-256 ECDSA circuit, `Pr[verifier accepts false statement] ≤ 71822/p256Prime < 2^{-238}` (`p256_security_level` in [ConcreteP256Bound.lean](LeanLongfellow/ConcreteP256Bound.lean)).
+
 The underlying proof chain builds on sumcheck soundness, GKR multi-layer composition, Ligero binding (with Merkle commitment and a blind column-opening verifier), Fiat-Shamir hash-derived soundness in the Random Oracle Model, and probabilistic error bounds (`≤ 2/|F|` for Ligero, `n·d/|F|` for sumcheck, `≤ ((BLOCK-1)/NCOL)^NREQ` for the column-opening LDT).
 
-All theorems (710+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
+All theorems (1000+) are machine-checked by Lean 4's kernel. The soundness chain contains **zero** `sorry`, `admit`, or `axiom` statements. Primality of the P-256 and BN254 primes is proven via Pocklington certificates with `native_decide`.
 
 ```
 $ lake env lean -c 'import LeanLongfellow.EndToEnd; #print axioms zkEidas_full_soundness_or_collision'
@@ -84,6 +90,7 @@ LeanLongfellow/
 │   ├── ColumnTests.lean    # Column-level linear/quadratic spot-checks
 │   ├── BlindVerifier.lean  # Blind Ligero verifier (no witness parameter)
 │   ├── BlindScheme.lean    # LigeroScheme with real Merkle commitment
+│   ├── Extraction.lean     # Knowledge extractor (RS-decoding-based) + error bounds
 │   ├── ReedSolomon/        # Reed-Solomon proximity testing
 │   │   ├── Defs.lean
 │   │   ├── Decode.lean     # RS decoding + knowledge extractability
@@ -153,7 +160,9 @@ LeanLongfellow/
 │
 ├── ZeroKnowledge/          # Honest-verifier zero-knowledge
 │   ├── Defs.lean           # HVZK definitions, simulator type
-│   └── HVZK.lean           # Sumcheck HVZK theorem
+│   ├── HVZK.lean           # Sumcheck HVZK theorem
+│   ├── FullSim.lean        # Full protocol simulator (sumcheck + column openings + Merkle)
+│   └── PerfectHVZK.lean    # Perfect HVZK (stat. distance = 0) + uniqueness counterexample
 │
 ├── Field/                  # Finite field instantiations
 │   ├── Basic.lean          # ZMod 97 (test field)
@@ -162,7 +171,9 @@ LeanLongfellow/
 │   ├── Pocklington.lean    # Pocklington primality certificates
 │   └── Subfield.lean       # GF(2^16) → GF(2^128) embedding
 │
-└── EndToEnd.lean           # Capstone: zkEidas_full_soundness
+├── EndToEnd.lean           # Capstone: zkEidas_full_soundness + ZK + knowledge soundness
+├── P256EndToEnd.lean       # P-256-specific E2E (eliminates abstract [EllipticCurve F])
+└── ConcreteP256Bound.lean  # Concrete ε < 2^{-238} for P-256 ECDSA circuit
 ```
 
 ## Proof Chain
@@ -198,6 +209,22 @@ The formalization is structured as a layered composition. Each layer's conclusio
                                 |
                  countSat_union_bound + countSat_adaptive_root
 
+  Knowledge extraction path:
+  longfellow_knowledge_soundness_capstone
+      ← ligero_extraction_sound (identity extractor)
+      ← niLigero_contrapositive + RS decoding
+      ← error ≤ 2/|F|
+
+  Zero-knowledge path:
+  fullLongfellow_isPerfectHVZK (stat. distance = 0)
+      ← simulateRounds (sumcheck simulator, degree ≤ 1)
+      ← simulateColumnOpening (Merkle tree + column openings)
+      ← isPerfectFullHVZK_implies_isPerfectHVZK
+
+  Concrete P-256 bound:
+  p256_security_level: ε = 71822/p256Prime < 2^{-238}
+      ← 3591 layers × 20|F|^9 + 2×|F|^9
+
   Blind verifier path (column-opening game):
   blindLigeroVerify → column_opening_authentic (Merkle CR)
       → blind_ligero_soundness → column_ldt_consistency
@@ -212,7 +239,7 @@ The formalization is parametric over standard cryptographic primitives, encoded 
 | Assumption | Typeclass | Property | Status |
 |---|---|---|---|
 | Poseidon collision resistance | `PoseidonHash` | Explicit `hcr` hypothesis or `_or_collision` | Non-vacuous |
-| Elliptic curve operations | `EllipticCurve` | Abstract group law | Instantiated (P-256) |
+| Elliptic curve operations | `EllipticCurve` / `EllipticCurveGroup` | Identity, commutativity, scalar mul laws, `fieldToNat` injectivity + associativity | Proved for P-256 via Mathlib `AddCommGroup` |
 | Merkle hash collision resistance | `MerkleHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
 | Column hash collision resistance | `ColumnHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
 | Generic collision resistance | `CRHash` | Explicit hypothesis or `_or_collision` | Non-vacuous |
