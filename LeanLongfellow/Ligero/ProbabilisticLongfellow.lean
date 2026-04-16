@@ -48,6 +48,7 @@ open Finset Polynomial MultilinearPoly Classical
 
 variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
 
+omit [Fintype F] in
 /-- **Probabilistic Longfellow soundness:** if the NI Ligero verifier
     accepts with good challenges (not in the bad set for either the
     linear or quadratic test), and the claimed sum is wrong, then a
@@ -59,7 +60,6 @@ variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
     3. `witness_satisfies_implies_verifierAccepts` — constraint satisfaction →
        `verifierAccepts` on decoded rounds
     4. `sumcheck_soundness_det` — wrong claim + verifierAccepts → root hit -/
-omit [Fintype F] in
 theorem probabilistic_longfellow_soundness {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n) (claimed_sum : F)
@@ -171,6 +171,7 @@ theorem probabilistic_longfellow_full_composition {n : ℕ}
 -- Section 4: Capstone — EndToEnd holds with good challenges
 -- ============================================================
 
+omit [Fintype F] in
 /-- **Probabilistic Longfellow capstone:** the EndToEnd soundness
     conclusion holds whenever the NI Ligero verifier accepts with
     good challenges and the sumcheck challenges avoid polynomial roots.
@@ -248,6 +249,7 @@ theorem concreteLongfellowError_total (NL s m q E_ldt : ℕ) :
 -- Section 6: Conditional probability statement
 -- ============================================================
 
+omit [DecidableEq F] [Fintype F] in
 /-- **Conditional soundness:** if the NI Ligero verifier accepts,
     then either `satisfiesAll` holds (the witness is valid), or
     one of the Ligero test challenges is in a bad set whose size
@@ -256,7 +258,6 @@ theorem concreteLongfellowError_total (NL s m q E_ldt : ℕ) :
     This is a direct restatement of `niLigero_binding_or_bad` in
     the Longfellow context, making explicit that the probabilistic
     path feeds into the deterministic sumcheck chain. -/
-omit [DecidableEq F] [Fintype F] in
 theorem probabilistic_longfellow_conditional {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n)

@@ -679,20 +679,20 @@ theorem zkEidas_knowledge_soundness [Fintype F] {n : ℕ}
     -- AND the extracted witness satisfies all constraints
     satisfiesAll (ligeroExtractWitness w)
       (generateAllConstraints p claimed_sum challenges) qcs :=
-  longfellow_knowledge_soundness_capstone p claimed_sum hn w challenges qcs
+  longfellow_ligero_knowledge_soundness_capstone p claimed_sum hn w challenges qcs
     niProof haccept h_lin_good h_quad_good hno_root
 
 -- ============================================================
 -- Section 16: Zero-Knowledge (re-export)
 -- ============================================================
 
+omit [DecidableEq F] in
 /-- **Full Longfellow zero-knowledge (re-export):**
     The full Longfellow protocol (sumcheck + Ligero column openings +
     Merkle authentication paths) achieves perfect honest-verifier
     zero-knowledge: there exists a simulator that produces valid
     transcripts without access to the witness, with degree-≤-1 round
     polynomials matching the honest prover's structural form. -/
-omit [DecidableEq F] in
 theorem zkEidas_perfect_hvzk
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]
@@ -702,6 +702,7 @@ theorem zkEidas_perfect_hvzk
     isPerfectFullHVZK F n D params d :=
   fullLongfellow_isPerfectHVZK validColProof h_col_valid
 
+omit [DecidableEq F] in
 /-- **zk-eIDAS: Soundness + Zero-Knowledge.**
 
     The zk-eIDAS Longfellow protocol simultaneously achieves:
@@ -723,7 +724,6 @@ theorem zkEidas_perfect_hvzk
     (`h_ecdsa_valid`) rather than derived from the GKR proof bundle,
     to decouple this theorem from the `EllipticCurve`/`EllipticCurveGroup`
     typeclass used by `ZkEidasProof`. -/
-omit [DecidableEq F] in
 theorem zkEidas_honest_verifier_zk
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]

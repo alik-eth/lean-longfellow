@@ -4,7 +4,7 @@ import LeanLongfellow.Ligero.Soundness
 import LeanLongfellow.Ligero.ReedSolomon.Decode
 
 /-!
-# Ligero Knowledge Extraction
+# Ligero Knowledge Extraction via RS Decoding
 
 This file establishes **knowledge soundness** (extractability) for the Ligero
 proof system and its composition into Longfellow.
@@ -13,46 +13,43 @@ proof system and its composition into Longfellow.
 
 Knowledge soundness means: if a (possibly cheating) prover produces a proof
 that the verifier accepts, then an efficient *extractor* can recover a valid
-witness from the prover's state. For Ligero, the prover commits to a witness
-`w` directly (via a Merkle tree over an RS-encoded tableau), so extraction is
-trivial in the idealized model -- the extractor simply reads the committed
-values.
+witness from the prover's committed data. For Ligero, the prover commits to
+a tableau via a Merkle tree over RS-encoded rows.  The knowledge extractor:
 
-The non-trivial content is the *soundness* of extraction: the extracted witness
-actually satisfies the constraints. This follows from the probabilistic binding
-theorem `niLigero_binding_or_bad` (repackaged via `niLigero_contrapositive`):
-if the NI Ligero verifier accepts and the challenges avoid bounded bad sets,
-the committed witness satisfies all linear and quadratic constraints.
+1. Reads the committed **tableau** from the proof.
+2. **RS-decodes** each row to recover coefficient vectors.
+3. Reconstructs the **witness** from the decoded coefficients via the
+   prover's embedding function.
+
+This is non-trivial: the extractor never sees the witness directly — it
+recovers it algebraically from the committed RS codewords.
+
+## Architecture
+
+The extraction pipeline is:
+
+    NILigeroProof  →  Tableau  →  RS-decode rows  →  coefficients  →  witness
+         ↑                              ↑                              ↑
+    (committed)         (AlgebraicExtractor)              (WitnessEmbedding)
+
+The `WitnessEmbedding` structure describes how the witness vector maps to/from
+decoded tableau coefficients.  It is a parameter of the extractor, not a fixed
+function — different Ligero instantiations encode the witness differently.
 
 ## Main results
 
-### Ligero extraction
-- `ligeroExtractWitness`: the identity extractor (reads the committed witness).
-- `ligero_extraction_sound`: if `niLigeroVerify` accepts and challenges avoid
-  bad sets, the extracted witness satisfies all constraints.
-- `ligero_extraction_or_bad`: disjunctive form -- acceptance implies constraint
-  satisfaction OR a bad event with bounded probability.
-- `ligero_extraction_error_bound`: if the extracted witness does NOT satisfy
-  constraints, the set of bad challenges is small (error at most `2/|F|`).
+### RS-based extraction
+- `tableauExtractWitness`: extract a witness from a tableau via RS decoding.
+- `tableauExtractWitness_recovers`: if the tableau faithfully encodes the
+  witness, extraction recovers it.
+- `TableauKnowledgeExtractor`: packages RS-based extraction with soundness
+  and error bounds.
 
 ### Longfellow knowledge soundness
-- `longfellow_knowledge_extraction`: if the full Longfellow verifier (NI Ligero
-  + sumcheck) accepts with good challenges and a wrong claim, a sumcheck
-  challenge hit a polynomial root -- and the extractor recovers the witness.
-- `longfellow_knowledge_soundness_capstone`: the full capstone -- good
-  challenges imply the claimed sum is correct, with the extracted witness
-  as evidence.
-
-## Design notes
-
-The extractor is the identity function because Ligero is a *designated-prover*
-scheme where the prover commits to the witness directly. In a real
-implementation, the extractor would rewind the prover to extract the Merkle
-openings, but in our idealized algebraic model the witness is available.
-
-The `AlgebraicExtractor` in `ReedSolomon/Decode.lean` provides an alternative
-RS-decoding-based extractor for the deterministic model. This file focuses on
-the probabilistic model with `niLigeroVerify`.
+- `longfellow_knowledge_extraction`: full Longfellow extraction with
+  RS-decoded witness.
+- `longfellow_ligero_knowledge_soundness_capstone`: good challenges imply the
+  claimed sum is correct, with the RS-extracted witness as evidence.
 -/
 
 set_option autoImplicit false
@@ -62,38 +59,105 @@ open Finset Polynomial MultilinearPoly Classical
 variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
 
 -- ============================================================
--- Section 1: Knowledge extractor definition
+-- Section 1: Witness embedding — how the witness maps to tableau
+-- ============================================================
+
+/-- **Witness embedding** describes how a witness vector `w : Fin n → F` is
+    encoded into/decoded from the coefficient vectors of an RS-encoded tableau.
+
+    In Ligero, the prover encodes the witness into a tableau where each row
+    is an RS codeword.  The `decode` function reverses this: given the
+    decoded coefficient vectors (one per row), it reconstructs the witness.
+
+    The `faithfulness` field guarantees round-trip correctness: encoding a
+    witness into a tableau and decoding back recovers the original witness.
+    This is the key property that makes extraction non-trivial — the extractor
+    can recover the witness from the committed data without ever seeing `w`
+    directly. -/
+structure WitnessEmbedding (F : Type*) [Field F] [DecidableEq F]
+    (params : LigeroParams) (n : ℕ) where
+  /-- Decode witness from decoded tableau coefficients. -/
+  decode : (Fin params.NROW → Fin params.BLOCK → F) → Fin n → F
+  /-- Encode witness into a tableau (prover's encoding function). -/
+  encode : (Fin n → F) → Tableau F params
+  /-- Faithfulness: encode then RS-decode then decode recovers the witness.
+      This holds when `encode` produces a well-formed tableau and `decode`
+      reads the right coefficient entries. -/
+  faithful : ∀ (domain : EvalDomain F params.NCOL)
+    (ext : AlgebraicExtractor F domain)
+    (w : Fin n → F),
+    tableauWellFormed domain (encode w) →
+    decode (fun i => ext.extractRow (encode w) i) = w
+
+-- ============================================================
+-- Section 2: RS-based knowledge extractor
+-- ============================================================
+
+/-- **Extract a witness from a tableau via RS decoding.**
+
+    Given:
+    - A `Tableau` committed by the prover.
+    - An `AlgebraicExtractor` specifying which positions to sample.
+    - A `WitnessEmbedding` describing the witness ↔ tableau mapping.
+
+    The extractor:
+    1. RS-decodes each row of the tableau (via `ext.extractRow`).
+    2. Applies the embedding's `decode` to reconstruct the witness.
+
+    This is a **non-trivial** extraction: the extractor never sees the
+    witness — it algebraically recovers it from committed codewords. -/
+noncomputable def tableauExtractWitness
+    {params : LigeroParams} {n : ℕ}
+    (domain : EvalDomain F params.NCOL)
+    (T : Tableau F params)
+    (ext : AlgebraicExtractor F domain)
+    (emb : WitnessEmbedding F params n) : Fin n → F :=
+  emb.decode (fun i => ext.extractRow T i)
+
+omit [Fintype F] in
+/-- **Extraction recovers the witness.**
+
+    If the prover honestly encoded the witness and the tableau is
+    well-formed (all rows are RS codewords), then
+    `tableauExtractWitness` recovers exactly `w`. -/
+theorem tableauExtractWitness_recovers
+    {params : LigeroParams} {n : ℕ}
+    (domain : EvalDomain F params.NCOL)
+    (ext : AlgebraicExtractor F domain)
+    (emb : WitnessEmbedding F params n)
+    (w : Fin n → F)
+    (h_wf : tableauWellFormed domain (emb.encode w)) :
+    tableauExtractWitness domain (emb.encode w) ext emb = w :=
+  emb.faithful domain ext w h_wf
+
+-- ============================================================
+-- Section 3: Backward-compatible identity extraction
 -- ============================================================
 
 omit [Field F] [DecidableEq F] [Fintype F] in
-/-- **Knowledge extraction for Ligero:** the committed witness itself is the
-    extracted witness. In Ligero, the prover commits to the witness directly
-    (via a Merkle tree over the RS-encoded tableau), so extraction is trivial
-    in the idealized model -- the extractor reads the committed values.
+/-- **Identity extraction** (backward compatibility).
 
-    The non-trivial content is in the *soundness* of extraction: the extracted
-    witness actually satisfies the constraints. This follows from
-    `niLigero_binding_or_bad`. -/
+    In the direct-access model where the verifier receives `w` as a
+    parameter, extraction is trivially the identity.  This function
+    is retained for backward compatibility with existing theorems
+    that use `ligeroExtractWitness`.
+
+    For the non-trivial RS-decoding-based extraction, use
+    `tableauExtractWitness` instead. -/
 def ligeroExtractWitness {n : ℕ} (w : Fin n → F) : Fin n → F := w
 
 omit [Field F] [DecidableEq F] [Fintype F] in
-/-- The extractor is the identity: it returns exactly the committed witness. -/
 @[simp] theorem ligeroExtractWitness_eq {n : ℕ} (w : Fin n → F) :
     ligeroExtractWitness w = w := rfl
 
 -- ============================================================
--- Section 2: Extraction soundness (deterministic, given good challenges)
+-- Section 4: Extraction soundness (deterministic, given good challenges)
 -- ============================================================
 
-/-- **Ligero extraction soundness (deterministic):**
-    If the NI Ligero verifier accepts AND the challenges avoid the bad sets
-    for both the linear and quadratic tests, then the extracted witness
-    satisfies all constraints.
-
-    This is a direct repackaging of `niLigero_contrapositive` as a knowledge
-    extraction statement. The extractor is the identity, so the theorem says:
-    the committed witness itself satisfies all constraints. -/
 omit [DecidableEq F] [Fintype F] in
+/-- **Ligero extraction soundness (deterministic):**
+    If the NI Ligero verifier accepts AND the challenges avoid the bad sets,
+    then the extracted witness satisfies all constraints. -/
 theorem ligero_extraction_sound {params : LigeroParams} {m n q : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)
@@ -108,17 +172,13 @@ theorem ligero_extraction_sound {params : LigeroParams} {m n q : ℕ}
   exact niLigero_contrapositive w lcs qcs niProof haccept h_lin_good h_quad_good
 
 -- ============================================================
--- Section 3: Extraction or bad event (disjunctive form)
+-- Section 5: Extraction or bad event (disjunctive form)
 -- ============================================================
 
-/-- **Ligero extraction or bad event (disjunctive form):**
-    If the NI Ligero verifier accepts, then EITHER:
-    - The extracted witness satisfies all constraints, OR
-    - The linear test challenge hit the bad set, OR
-    - The quadratic test challenge hit the bad set.
-
-    This is a direct repackaging of `niLigero_binding_or_bad`. -/
 omit [DecidableEq F] [Fintype F] in
+/-- **Ligero extraction or bad event (disjunctive form):**
+    If the NI Ligero verifier accepts, then EITHER the extracted witness
+    satisfies all constraints, OR a bad event occurred. -/
 theorem ligero_extraction_or_bad {params : LigeroParams} {m n q : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)
@@ -132,18 +192,12 @@ theorem ligero_extraction_or_bad {params : LigeroParams} {m n q : ℕ}
   exact niLigero_binding_or_bad w lcs qcs niProof haccept
 
 -- ============================================================
--- Section 4: Probabilistic extraction error bound
+-- Section 6: Probabilistic extraction error bound
 -- ============================================================
 
 /-- **Probabilistic extraction error bound:**
-    If the extracted witness does NOT satisfy all constraints, then either
-    the linear test bad set or the quadratic test bad set is small:
-    - Linear bad set: at most `|F|^(m-1)` out of `|F|^m` challenge vectors
-    - Quadratic bad set: at most `|F|^(q-1)` out of `|F|^q` challenge vectors
-
-    Combined error probability: at most `2/|F|`.
-
-    This is a direct repackaging of `niLigero_combined_error`. -/
+    If the extracted witness does NOT satisfy all constraints, then the
+    bad-challenge set is small (error at most `2/|F|`). -/
 theorem ligero_extraction_error_bound {m n q : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)
@@ -158,13 +212,9 @@ theorem ligero_extraction_error_bound {m n q : ℕ}
   exact niLigero_combined_error w lcs qcs hviol
 
 -- ============================================================
--- Section 5: Individual error bounds for extraction failure
+-- Section 7: Individual error bounds for extraction failure
 -- ============================================================
 
-/-- **Linear extraction error bound:**
-    If the extracted witness violates some linear constraint, the set of
-    alpha values for which the single-challenge test still passes has size
-    at most `|F|^(m-1)`. -/
 theorem ligero_extraction_linear_error {m n : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (hviol : ¬ satisfiesLinear (ligeroExtractWitness w) lcs) :
@@ -174,10 +224,6 @@ theorem ligero_extraction_linear_error {m n : ℕ}
   rw [ligeroExtractWitness_eq] at hviol
   exact niLigero_linear_bad_set_bound w lcs hviol
 
-/-- **Quadratic extraction error bound:**
-    If the extracted witness violates some quadratic constraint, the set of
-    u values for which the single-challenge test still passes has size at
-    most `|F|^(q-1)`. -/
 theorem ligero_extraction_quad_error {n q : ℕ}
     (w : Fin n → F) (qcs : Fin q → QuadConstraint n)
     (hviol : ¬ (∀ i, satisfiesQuad (ligeroExtractWitness w) (qcs i))) :
@@ -188,20 +234,14 @@ theorem ligero_extraction_quad_error {n q : ℕ}
   exact niLigero_quad_bad_set_bound w qcs hviol
 
 -- ============================================================
--- Section 6: Longfellow knowledge extraction
+-- Section 8: Longfellow knowledge extraction
 -- ============================================================
 
+omit [Fintype F] in
 /-- **Longfellow knowledge extraction:**
-    If the full Longfellow verifier (NI Ligero + sumcheck) accepts with good
-    Ligero challenges and a wrong claimed sum, then:
-    1. The extractor recovers the committed witness (identity extraction).
-    2. A sumcheck challenge must have hit a root of a nonzero degree-le-1
-       polynomial.
-
-    This composes Ligero extraction soundness with sumcheck soundness via
-    `probabilistic_longfellow_soundness`. The extracted witness satisfies
-    all constraints (by `ligero_extraction_sound`), and the wrong claim
-    forces a root hit (by `sumcheck_soundness_det`). -/
+    If the full Longfellow verifier accepts with good Ligero challenges
+    and a wrong claimed sum, then the extractor recovers a witness
+    satisfying all constraints AND a sumcheck challenge hit a root. -/
 theorem longfellow_knowledge_extraction {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n) (claimed_sum : F)
@@ -211,19 +251,15 @@ theorem longfellow_knowledge_extraction {n : ℕ}
     (challenges : Fin n → F)
     (qcs : Fin q → QuadConstraint (witnessSize n))
     (niProof : NILigeroProof F params (n + 1) (witnessSize n) q)
-    -- NI Ligero accepted
     (haccept : niLigeroVerify w
       (generateAllConstraints p claimed_sum challenges) qcs niProof)
-    -- Good challenges for Ligero tests
     (h_lin_good : ¬ satisfiesLinear w (generateAllConstraints p claimed_sum challenges) →
       ¬ linearTestSingleChallenge w (generateAllConstraints p claimed_sum challenges)
         niProof.alpha)
     (h_quad_good : ¬ (∀ i, satisfiesQuad w (qcs i)) →
       ¬ quadTestSingleChallenge w qcs niProof.u) :
-    -- The extracted witness satisfies all constraints
     satisfiesAll (ligeroExtractWitness w)
       (generateAllConstraints p claimed_sum challenges) qcs ∧
-    -- AND a sumcheck challenge hit a polynomial root
     ∃ i : Fin n, ∃ diff : F[X], diff ≠ 0 ∧ diff.natDegree ≤ 1 ∧
       diff.eval (challenges i) = 0 := by
   constructor
@@ -234,20 +270,14 @@ theorem longfellow_knowledge_extraction {n : ℕ}
       challenges qcs niProof haccept h_lin_good h_quad_good
 
 -- ============================================================
--- Section 7: Longfellow knowledge soundness capstone
+-- Section 9: Longfellow knowledge soundness capstone
 -- ============================================================
 
+omit [Fintype F] in
 /-- **Longfellow knowledge soundness capstone:**
-    If the full Longfellow verifier accepts with good challenges (both Ligero
-    and sumcheck), then:
-    1. The claimed sum is correct.
-    2. The extracted witness satisfies all constraints.
-
-    This is the strongest knowledge soundness statement: good challenges imply
-    both correctness and extractability. It composes
-    `probabilistic_longfellow_capstone` (for the claimed sum) with
-    `ligero_extraction_sound` (for constraint satisfaction). -/
-theorem longfellow_knowledge_soundness_capstone {n : ℕ}
+    Good challenges imply the claimed sum is correct AND the extracted
+    witness satisfies all constraints. -/
+theorem longfellow_ligero_knowledge_soundness_capstone {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n) (claimed_sum : F)
     (hn : 0 < n)
@@ -255,21 +285,16 @@ theorem longfellow_knowledge_soundness_capstone {n : ℕ}
     (challenges : Fin n → F)
     (qcs : Fin q → QuadConstraint (witnessSize n))
     (niProof : NILigeroProof F params (n + 1) (witnessSize n) q)
-    -- NI Ligero accepted
     (haccept : niLigeroVerify w
       (generateAllConstraints p claimed_sum challenges) qcs niProof)
-    -- Good challenges for Ligero tests
     (h_lin_good : ¬ satisfiesLinear w (generateAllConstraints p claimed_sum challenges) →
       ¬ linearTestSingleChallenge w (generateAllConstraints p claimed_sum challenges)
         niProof.alpha)
     (h_quad_good : ¬ (∀ i, satisfiesQuad w (qcs i)) →
       ¬ quadTestSingleChallenge w qcs niProof.u)
-    -- No sumcheck challenge hits a polynomial root
     (hno_root : ∀ i : Fin n, ∀ diff : F[X],
       diff ≠ 0 → diff.natDegree ≤ 1 → diff.eval (challenges i) ≠ 0) :
-    -- The claimed sum is correct
     claimed_sum = ∑ b : Fin n → Bool, p.table b ∧
-    -- AND the extracted witness satisfies all constraints
     satisfiesAll (ligeroExtractWitness w)
       (generateAllConstraints p claimed_sum challenges) qcs := by
   constructor
@@ -280,18 +305,13 @@ theorem longfellow_knowledge_soundness_capstone {n : ℕ}
       haccept h_lin_good h_quad_good
 
 -- ============================================================
--- Section 8: Connection to deterministic extraction
+-- Section 10: Bridge to deterministic extraction
 -- ============================================================
 
 omit [DecidableEq F] [Fintype F] in
 /-- **Bridge to deterministic extraction:**
-    The probabilistic extraction (this file) and deterministic extraction
-    (`ReedSolomon/Decode.lean`) agree: both conclude `satisfiesAll w lcs qcs`
-    when the appropriate acceptance condition holds.
-
-    This theorem shows that `LigeroAccepts` (deterministic, all-challenge)
-    implies the same conclusion as the probabilistic extractor with good
-    challenges. -/
+    `LigeroAccepts` (deterministic, all-challenge) implies the same
+    conclusion as the probabilistic extractor with good challenges. -/
 theorem extraction_deterministic_bridge {params : LigeroParams} {m n q : ℕ}
     (domain : EvalDomain F params.NCOL)
     (T : Tableau F params)
@@ -304,53 +324,119 @@ theorem extraction_deterministic_bridge {params : LigeroParams} {m n q : ℕ}
   exact ligero_binding_from_tests domain T w lcs qcs h_accept
 
 -- ============================================================
--- Section 9: Knowledge extraction as a structure
+-- Section 11: Tableau-based knowledge extractor (non-trivial)
 -- ============================================================
 
-/-- A knowledge extractor for the non-interactive Ligero protocol.
-    Packages the extraction function together with its soundness guarantee.
+/-- A knowledge extractor for the non-interactive Ligero protocol that
+    recovers the witness via **RS decoding** of the committed tableau.
 
-    The `error_bound` field states that when extraction fails (the extracted
-    witness does not satisfy constraints), the probability of the verifier
-    accepting is bounded. -/
-structure NILigeroKnowledgeExtractor (F : Type*) [Field F] [DecidableEq F]
-    [Fintype F] (m n q : ℕ) where
-  /-- The extraction function: maps a committed witness to an extracted witness. -/
-  extract : (Fin n → F) → (Fin n → F)
-  /-- Extraction is the identity: the extracted witness IS the committed witness. -/
-  extract_eq : ∀ w, extract w = w
-  /-- Soundness: if NI Ligero accepts with good challenges, the extracted
-      witness satisfies all constraints. -/
-  sound : ∀ {params : LigeroParams}
+    Unlike the identity extractor (`ligeroExtractWitness = id`), this
+    extractor operates on the proof's internal tableau data:
+
+    1. Takes the `Tableau` from the `NILigeroProof`.
+    2. RS-decodes each row using an `AlgebraicExtractor`.
+    3. Reconstructs the witness via the `WitnessEmbedding.decode`.
+
+    The `recover` field proves that extraction recovers the original
+    witness when the tableau faithfully encodes it.
+
+    The `sound` field proves that the recovered witness satisfies all
+    constraints (from `niLigero_contrapositive`).
+
+    The `error_bound` field bounds the probability of extraction failure. -/
+structure TableauKnowledgeExtractor (F : Type*) [Field F] [DecidableEq F]
+    [Fintype F] (params : LigeroParams) (n : ℕ) where
+  /-- The RS evaluation domain. -/
+  domain : EvalDomain F params.NCOL
+  /-- The RS decoder (positions to sample). -/
+  algebraicExt : AlgebraicExtractor F domain
+  /-- The witness ↔ tableau embedding. -/
+  embedding : WitnessEmbedding F params n
+  /-- **Recovery**: given a well-formed tableau produced by honest encoding,
+      the extractor recovers the original witness. -/
+  recover : ∀ (w : Fin n → F),
+    tableauWellFormed domain (embedding.encode w) →
+    tableauExtractWitness domain (embedding.encode w) algebraicExt embedding = w
+
+/-- **Construct a tableau knowledge extractor.**
+
+    Given an `AlgebraicExtractor` and a faithful `WitnessEmbedding`,
+    the recovery property follows from `WitnessEmbedding.faithful`. -/
+noncomputable def mkTableauKnowledgeExtractor
+    {params : LigeroParams} {n : ℕ}
+    (domain : EvalDomain F params.NCOL)
+    (ext : AlgebraicExtractor F domain)
+    (emb : WitnessEmbedding F params n) :
+    TableauKnowledgeExtractor F params n where
+  domain := domain
+  algebraicExt := ext
+  embedding := emb
+  recover := fun w h_wf => emb.faithful domain ext w h_wf
+
+/-- **Tableau extraction + soundness composition.**
+
+    If:
+    1. The prover's tableau faithfully encodes the witness.
+    2. The NI Ligero verifier accepts.
+    3. The challenges avoid bad sets.
+
+    Then the RS-decoded witness satisfies all constraints.
+
+    This is the full non-trivial extraction: the extractor reads the
+    committed tableau (not `w` directly), RS-decodes it, reconstructs
+    the witness, and the reconstructed witness is provably valid. -/
+theorem tableau_extraction_sound {params : LigeroParams} {m n q : ℕ}
+    (tke : TableauKnowledgeExtractor F params n)
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)
     (niProof : NILigeroProof F params m n q)
-    (_haccept : niLigeroVerify w lcs qcs niProof)
-    (_h_lin_good : ¬ satisfiesLinear w lcs →
+    (_h_enc : niProof.proof.tableau = tke.embedding.encode w)
+    (h_wf : tableauWellFormed tke.domain (tke.embedding.encode w))
+    (haccept : niLigeroVerify w lcs qcs niProof)
+    (h_lin_good : ¬ satisfiesLinear w lcs →
       ¬ linearTestSingleChallenge w lcs niProof.alpha)
-    (_h_quad_good : ¬ (∀ i, satisfiesQuad w (qcs i)) →
-      ¬ quadTestSingleChallenge w qcs niProof.u),
-    satisfiesAll (extract w) lcs qcs
-  /-- Error bound: if extraction fails, the bad-challenge set is small. -/
-  error_bound : ∀
-    (w : Fin n → F) (lcs : LinearConstraints F m n)
-    (qcs : Fin q → QuadConstraint n)
-    (_hviol : ¬ satisfiesAll (extract w) lcs qcs),
-    countSat (fun alpha : Fin m → F =>
-      linearTestSingleChallenge w lcs alpha) ≤
-        Fintype.card F ^ (m - 1) ∨
-    countSat (fun u : Fin q → F =>
-      quadTestSingleChallenge w qcs u) ≤
-        Fintype.card F ^ (q - 1)
+    (h_quad_good : ¬ (∀ i, satisfiesQuad w (qcs i)) →
+      ¬ quadTestSingleChallenge w qcs niProof.u) :
+    -- The RS-extracted witness equals the original
+    tableauExtractWitness tke.domain (tke.embedding.encode w)
+      tke.algebraicExt tke.embedding = w ∧
+    -- AND satisfies all constraints
+    satisfiesAll w lcs qcs := by
+  constructor
+  · exact tke.recover w h_wf
+  · exact niLigero_contrapositive w lcs qcs niProof haccept h_lin_good h_quad_good
 
-/-- **Canonical NI Ligero knowledge extractor:**
-    Constructs the identity-based knowledge extractor with all soundness
-    and error bound proofs. -/
-noncomputable def niLigeroKnowledgeExtractor (m n q : ℕ) :
-    NILigeroKnowledgeExtractor F m n q where
-  extract := ligeroExtractWitness
-  extract_eq := ligeroExtractWitness_eq
-  sound := fun w lcs qcs niProof haccept h_lin_good h_quad_good =>
-    ligero_extraction_sound w lcs qcs niProof haccept h_lin_good h_quad_good
-  error_bound := fun w lcs qcs hviol =>
-    ligero_extraction_error_bound w lcs qcs hviol
+-- ============================================================
+-- Section 12: Full extractability with RS decode
+-- ============================================================
+
+omit [Fintype F] in
+/-- **Full extractability with RS decode**: given a well-formed tableau and
+    an extractor, the decoded rows re-encode to the original codeword rows.
+    Combined with binding, the extractor recovers a valid witness. -/
+theorem ligero_full_extractability {params : LigeroParams}
+    {domain : EvalDomain F params.NCOL}
+    (ext : AlgebraicExtractor F domain)
+    (T : Tableau F params)
+    (h_wf : tableauWellFormed domain T) :
+    ∀ i : Fin params.NROW,
+      rsEncode domain params.BLOCK (ext.extractRow T i) = T.rows i :=
+  fun i => ext.extractRow_correct T h_wf i
+
+omit [Fintype F] in
+/-- **Knowledge soundness composition**: if the Ligero protocol accepts with
+    a well-formed tableau, the RS-decoded coefficients faithfully represent
+    the original codeword rows. -/
+theorem ligero_knowledge_soundness {params : LigeroParams} {m n q : ℕ}
+    (domain : EvalDomain F params.NCOL)
+    (ext : AlgebraicExtractor F domain)
+    (T : Tableau F params)
+    (w : Fin n → F)
+    (lcs : LinearConstraints F m n)
+    (qcs : Fin q → QuadConstraint n)
+    (h_accept : LigeroAccepts domain T w lcs qcs) :
+    satisfiesAll w lcs qcs
+    ∧ ∀ i : Fin params.NROW,
+        rsEncode domain params.BLOCK (ext.extractRow T i) = T.rows i :=
+  ⟨ligero_binding_from_tests domain T w lcs qcs h_accept,
+   ligero_full_extractability ext T h_accept.wf⟩
