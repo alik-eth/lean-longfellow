@@ -692,6 +692,7 @@ theorem zkEidas_knowledge_soundness [Fintype F] {n : ℕ}
     zero-knowledge: there exists a simulator that produces valid
     transcripts without access to the witness, with degree-≤-1 round
     polynomials matching the honest prover's structural form. -/
+omit [DecidableEq F] in
 theorem zkEidas_perfect_hvzk
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]
@@ -722,6 +723,7 @@ theorem zkEidas_perfect_hvzk
     (`h_ecdsa_valid`) rather than derived from the GKR proof bundle,
     to decouple this theorem from the `EllipticCurve`/`EllipticCurveGroup`
     typeclass used by `ZkEidasProof`. -/
+omit [DecidableEq F] in
 theorem zkEidas_honest_verifier_zk
     {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
     [ColumnHash D F params.NROW]

@@ -93,6 +93,7 @@ omit [Field F] [DecidableEq F] [Fintype F] in
     This is a direct repackaging of `niLigero_contrapositive` as a knowledge
     extraction statement. The extractor is the identity, so the theorem says:
     the committed witness itself satisfies all constraints. -/
+omit [DecidableEq F] [Fintype F] in
 theorem ligero_extraction_sound {params : LigeroParams} {m n q : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)
@@ -117,6 +118,7 @@ theorem ligero_extraction_sound {params : LigeroParams} {m n q : ℕ}
     - The quadratic test challenge hit the bad set.
 
     This is a direct repackaging of `niLigero_binding_or_bad`. -/
+omit [DecidableEq F] [Fintype F] in
 theorem ligero_extraction_or_bad {params : LigeroParams} {m n q : ℕ}
     (w : Fin n → F) (lcs : LinearConstraints F m n)
     (qcs : Fin q → QuadConstraint n)

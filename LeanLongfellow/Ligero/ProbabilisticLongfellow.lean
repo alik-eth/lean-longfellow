@@ -59,6 +59,7 @@ variable {F : Type*} [Field F] [DecidableEq F] [Fintype F]
     3. `witness_satisfies_implies_verifierAccepts` — constraint satisfaction →
        `verifierAccepts` on decoded rounds
     4. `sumcheck_soundness_det` — wrong claim + verifierAccepts → root hit -/
+omit [Fintype F] in
 theorem probabilistic_longfellow_soundness {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n) (claimed_sum : F)
@@ -255,6 +256,7 @@ theorem concreteLongfellowError_total (NL s m q E_ldt : ℕ) :
     This is a direct restatement of `niLigero_binding_or_bad` in
     the Longfellow context, making explicit that the probabilistic
     path feeds into the deterministic sumcheck chain. -/
+omit [DecidableEq F] [Fintype F] in
 theorem probabilistic_longfellow_conditional {n : ℕ}
     {params : LigeroParams} {q : ℕ}
     (p : MultilinearPoly F n)
