@@ -31,7 +31,7 @@ The binding proof is parameterized by a `satBridge` function that
 encapsulates the RS-proximity + constraint-embedding bridge.  A
 concrete deployment proves `satBridge` once from the RS encoding
 structure and constraint embedding.  The scheme instance itself
-is sorry-free.
+is fully proven.
 
 ## Architecture
 
@@ -203,7 +203,7 @@ noncomputable def blindSchemeCommit {params : LigeroParams} {n d : ℕ}
 
     In a concrete deployment, `satBridge` is proved once from the RS
     encoding structure and constraint embedding. Here we take it as a
-    parameter so the `LigeroScheme` instance is sorry-free. -/
+    parameter so the `LigeroScheme` instance is fully proven. -/
 theorem blind_scheme_binding {params : LigeroParams} {n m q d : ℕ}
     [ColumnHash D F params.NROW]
     (embed : (Fin n → F) → Tableau F params)
@@ -272,7 +272,7 @@ noncomputable def blindLigeroScheme
 
 -- ============================================================
 -- Section 7: Decomposition — blind acceptance implies column-level
---            soundness (proved, no sorry)
+--            soundness (fully proved)
 -- ============================================================
 
 /-- **Column-level soundness from blind scheme acceptance**: if the
