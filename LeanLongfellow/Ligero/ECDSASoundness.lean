@@ -44,6 +44,23 @@ theorem ecdsa_ligero_soundness [EllipticCurveGroup F]
     (fun i => h_sat.2 i) hxcoord
 
 -- ============================================================
+-- Section 1b: Soundness via structural witness (no hxcoord)
+-- ============================================================
+
+/-- **ECDSA soundness (structural)**: if the prover supplies a valid
+    structural EC witness (`ECDSAWitnessValid`), then `ecdsaVerify` holds.
+
+    This version eliminates the `hxcoord` hypothesis entirely: the
+    x-coordinate match is derived from the structural EC computation
+    encoded in the witness. -/
+theorem ecdsa_ligero_soundness_structural [EllipticCurveGroup F] [Fintype F]
+    [CurveInstantiation F]
+    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) :
+    ecdsaVerify z Q sig :=
+  ecdsaWitnessValid_implies_verify z Q sig n wv
+
+-- ============================================================
 -- Section 2: Error bound
 -- ============================================================
 

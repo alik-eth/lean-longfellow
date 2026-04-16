@@ -1,5 +1,6 @@
 import LeanLongfellow.Ligero.Constraints
 import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.ECDSA.Circuit
 
 set_option autoImplicit false
 
@@ -100,3 +101,40 @@ noncomputable def ecdsaHonestWitness [EllipticCurveGroup F]
   | ⟨5, _⟩ => z * sig.s⁻¹
   | ⟨6, _⟩ => sig.r * sig.s⁻¹
   | ⟨7, _⟩ => xcoord_R
+
+-- ============================================================
+-- Section: Structural ECDSA Witness
+-- ============================================================
+
+/-- **Structural ECDSA witness validity.**
+
+    Packages a circuit-level `ECDSAWitness` together with all correctness
+    properties needed to derive `ecdsaVerify` without any external
+    `hxcoord` hypothesis.  The key idea is that the EC computation
+    (scalar multiplications + point addition) is encoded structurally
+    via `ecdsaConstraint`, and the scalar-field bridges (`u1_bridge`,
+    `u2_bridge`) connect the circuit scalars to the abstract ECDSA
+    scalars in `ZMod groupOrder`.
+
+    From these fields, `ecdsaConstraint_implies_verify` directly yields
+    `ecdsaVerify z Q sig`. -/
+structure ECDSAWitnessValid (F : Type*) [Field F]
+    [ec : EllipticCurveGroup F] [Fintype F] [CurveInstantiation F]
+    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    (n : ℕ) where
+  /-- The circuit-level witness with all intermediate EC values. -/
+  wit : ECDSAWitness F n
+  /-- Bit length is sufficient for the field. -/
+  hn : 2 ^ n ≤ Fintype.card F
+  /-- The circuit constraint system is satisfied. -/
+  constraint_sat : ecdsaConstraint CurveInstantiation.params n z
+    CurveInstantiation.generatorPoint (CurveInstantiation.toECPoint Q)
+    sig.r sig.s wit
+  /-- Circuit scalar u1 matches the abstract ECDSA scalar u1 = z * s⁻¹ mod n. -/
+  u1_bridge : ec.fieldToNat wit.u1 =
+    ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)
+  /-- Circuit scalar u2 matches the abstract ECDSA scalar u2 = r * s⁻¹ mod n. -/
+  u2_bridge : ec.fieldToNat wit.u2 =
+    ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
+      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)

@@ -145,7 +145,26 @@ theorem ecdsaConstraints_imply_verify [EllipticCurveGroup F]
   exact ⟨hs_ne, hxeq⟩
 
 -- ============================================================
--- Section 4: Completeness (honest witness satisfies constraints)
+-- Section 4: Structural witness bridge (eliminates hxcoord)
+-- ============================================================
+
+/-- **Structural ECDSA bridge**: if `ECDSAWitnessValid` is satisfied,
+    then `ecdsaVerify z Q sig` holds.
+
+    This eliminates the `hxcoord` hypothesis by deriving the x-coordinate
+    match from the structural EC computation encoded in the witness.
+    The proof delegates to `ecdsaConstraint_implies_verify` from
+    `Circuit.lean`, which already proves the full extraction. -/
+theorem ecdsaWitnessValid_implies_verify [EllipticCurveGroup F] [Fintype F]
+    [CurveInstantiation F]
+    (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
+    (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) :
+    ecdsaVerify z Q sig :=
+  ecdsaConstraint_implies_verify n z Q sig wv.wit wv.hn
+    wv.u1_bridge wv.u2_bridge wv.constraint_sat
+
+-- ============================================================
+-- Section 5: Completeness (honest witness satisfies constraints)
 -- ============================================================
 
 /-- Completeness: the honest witness satisfies all quadratic ECDSA constraints. -/
