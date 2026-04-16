@@ -5,6 +5,7 @@ import LeanLongfellow.Circuit.ECDSA.GatePointAdd
 import LeanLongfellow.Circuit.ECDSA.Spec
 import LeanLongfellow.Circuit.ECDSA.Circuit
 import LeanLongfellow.Circuit.ECDSA.Composition
+import LeanLongfellow.Circuit.ECDSA.GateSemantics
 
 open Finset MultilinearPoly
 
@@ -216,3 +217,81 @@ noncomputable def ecdsaGateCircuitSpec [EllipticCurveGroup F]
 
 /-- The gate-level ECDSA circuit has the expected number of layers. -/
 theorem ecdsaGateNL_eq (n : ℕ) : ecdsaGateNL n = 14 * n + 7 := rfl
+
+-- ============================================================
+-- Section 5a: Field ops call site (exercises field_ops_extraction)
+-- ============================================================
+
+/-- **Field ops extraction call site**: confirms the three field-ops layers
+    produce the expected wire equations when given consistent layer values. -/
+theorem ecdsaGate_fieldOps_sound
+    (fo_vals : Fin 4 → LayerValues F 5)
+    (hcons0 : ∀ g, layerConsistent (fieldOps_invCheck F) (fo_vals 0) (fo_vals 1) g)
+    (hcons1 : ∀ g, layerConsistent (fieldOps_u1 F) (fo_vals 1) (fo_vals 2) g)
+    (hcons2 : ∀ g, layerConsistent (fieldOps_u2 F) (fo_vals 2) (fo_vals 3) g)
+    (hzero : (fo_vals 3).table W_ZERO = 0) :
+    (fo_vals 0).table W_TEMP1 = (fo_vals 3).table W_TEMP4 * (fo_vals 3).table W_SINV ∧
+    (fo_vals 1).table W_U1 = (fo_vals 3).table W_TEMP5 * (fo_vals 3).table W_SINV ∧
+    (fo_vals 2).table W_U2 = (fo_vals 3).table W_ZCHECK * (fo_vals 3).table W_SINV :=
+  field_ops_extraction F fo_vals hcons0 hcons1 hcons2 hzero
+
+-- ============================================================
+-- Section 5b: Scalar mul call site (exercises scalar_mul_gate_extraction)
+-- ============================================================
+
+/-- **Scalar mul extraction call site**: confirms the 7n scalar multiplication
+    layers produce the expected multiplication equations and boolean bits. -/
+theorem ecdsaGate_scalarMul_sound
+    (n : ℕ)
+    (sm_vals : Fin (7 * n + 1) → LayerValues F 5)
+    (hcons : ∀ (k : Fin (7 * n)), ∀ g,
+      layerConsistent (scalarMulAllLayers F n ⟨k.val, k.isLt⟩)
+        (sm_vals ⟨k.val, by omega⟩) (sm_vals ⟨k.val + 1, by omega⟩) g)
+    (hzero : (sm_vals ⟨7 * n, by omega⟩).table W_ZERO = 0)
+    (hzcheck : ∀ (i : Fin n),
+      (sm_vals ⟨7 * i.val, by omega⟩).table W_ZCHECK =
+      (sm_vals ⟨7 * i.val, by omega⟩).table W_BIT) :
+    (∀ (i : Fin (n + 1)), (sm_vals ⟨7 * i.val, by omega⟩).table W_ZERO = 0) ∧
+    (∀ (i : Fin n),
+      let Vbot := sm_vals ⟨7 * (i.val + 1), by omega⟩
+      (sm_vals ⟨7 * i.val, by omega⟩).table W_TEMP1 =
+        Vbot.table W_ACC_X * Vbot.table W_ACC_X ∧
+      (sm_vals ⟨7 * i.val + 1, by omega⟩).table W_TEMP2 =
+        Vbot.table W_LAMBDA_D * Vbot.table W_LAMBDA_D ∧
+      (sm_vals ⟨7 * i.val + 2, by omega⟩).table W_TEMP3 =
+        Vbot.table W_LAMBDA_D * Vbot.table W_TEMP4 ∧
+      (sm_vals ⟨7 * i.val + 3, by omega⟩).table W_TEMP1 =
+        Vbot.table W_LAMBDA_A * Vbot.table W_TEMP5 ∧
+      (sm_vals ⟨7 * i.val + 4, by omega⟩).table W_TEMP2 =
+        Vbot.table W_LAMBDA_A * Vbot.table W_LAMBDA_A ∧
+      (sm_vals ⟨7 * i.val + 5, by omega⟩).table W_TEMP3 =
+        Vbot.table W_LAMBDA_A * Vbot.table W_ACC_X ∧
+      (sm_vals ⟨7 * i.val + 6, by omega⟩).table W_ZCHECK =
+        Vbot.table W_BIT * Vbot.table W_BIT) ∧
+    (∀ (i : Fin n),
+      let Vtop := sm_vals ⟨7 * i.val, by omega⟩
+      let Vbot := sm_vals ⟨7 * (i.val + 1), by omega⟩
+      Vtop.table W_ACC_X = Vbot.table W_ACC_X ∧
+      Vtop.table W_ACC_Y = Vbot.table W_ACC_Y ∧
+      Vtop.table W_LAMBDA_D = Vbot.table W_LAMBDA_D ∧
+      Vtop.table W_LAMBDA_A = Vbot.table W_LAMBDA_A ∧
+      Vtop.table W_BIT = Vbot.table W_BIT) ∧
+    (∀ (i : Fin n), isBool ((sm_vals ⟨7 * (i.val + 1), by omega⟩).table W_BIT)) :=
+  scalar_mul_gate_extraction F n sm_vals hcons hzero hzcheck
+
+-- ============================================================
+-- Section 5c: Point add call site (exercises point_add_gate_extraction)
+-- ============================================================
+
+/-- **Point add extraction call site**: confirms the three point-add layers
+    produce the expected multiplication equations. -/
+theorem ecdsaGate_pointAdd_sound
+    (pa_vals : Fin 4 → LayerValues F 5)
+    (hcons0 : ∀ g, layerConsistent (pointAdd_layer0 F) (pa_vals 0) (pa_vals 1) g)
+    (hcons1 : ∀ g, layerConsistent (pointAdd_layer1 F) (pa_vals 1) (pa_vals 2) g)
+    (hcons2 : ∀ g, layerConsistent (pointAdd_layer2 F) (pa_vals 2) (pa_vals 3) g)
+    (hzero : (pa_vals 3).table W_ZERO = 0) :
+    (pa_vals 0).table W_TEMP1 = (pa_vals 1).table W_FINAL_LAM * (pa_vals 1).table W_TEMP4 ∧
+    (pa_vals 1).table W_TEMP2 = (pa_vals 2).table W_FINAL_LAM * (pa_vals 2).table W_FINAL_LAM ∧
+    (pa_vals 2).table W_TEMP3 = (pa_vals 3).table W_FINAL_LAM * (pa_vals 3).table W_TEMP5 :=
+  point_add_gate_extraction F pa_vals hcons0 hcons1 hcons2 hzero
