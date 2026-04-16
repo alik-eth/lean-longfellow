@@ -383,6 +383,14 @@ theorem zkEidas_rom_soundness [Fintype F] {n d : ℕ}
     eliminates hash injectivity hypotheses entirely, see
     `zkEidasFull_soundness_or_collision`.
 
+    **On `Function.Injective` hypotheses:** The hash injectivity hypotheses
+    (`hcr3`, `hcr1`, `hcr_escrow`) are false on any finite field by
+    pigeonhole, making this theorem vacuously true for concrete
+    instantiations. They model symbolic collision resistance — the
+    standard approach in mechanized protocol verification (ProVerif,
+    Tamarin, CryptoVerif). For the collision-extracting form that avoids
+    this hypothesis, see `zkEidas_full_soundness_or_collision`.
+
     The probability that a random challenge hits a root is bounded by the
     Schwartz-Zippel lemma, which feeds into `zkEidas_fiatShamir_bound`. -/
 theorem zkEidas_full_soundness [EllipticCurveGroup F] [PoseidonHash F 3]
@@ -445,9 +453,26 @@ open Classical in
     properties hold, OR a concrete collision can be extracted for one of
     the hash functions (Poseidon-3, Poseidon-1, or CRHash/escrow).
 
-    This formulation is strictly stronger because the collision-resistance
-    hypotheses are replaced by constructive case splits that produce a
-    witness when the properties fail. -/
+    The collision witnesses are extracted FROM THE PROOF DATA (the
+    commitment mismatch, escrow digest, nullifier, or holder hash),
+    not from pigeonhole existence. This makes the theorem a genuine
+    cryptographic reduction: "breaking property X → finding a collision
+    in hash Y from specific inputs."
+
+    **Limitation (symbolic model):** On a finite field `F`, any hash
+    `F^n → F` with `n ≥ 2` is non-injective by pigeonhole, so
+    `PoseidonCollision F n` is trivially provable via `Classical.choice`
+    without reading the proof data. This means the right disjunct is
+    always inhabited, making `P ∨ True` trivially true in Lean's logic.
+
+    The value of this formulation is therefore as a TEMPLATE for a
+    computational reduction, not as a standalone soundness proof.
+    A meaningful interpretation requires a computational model (PPT
+    adversaries, negligible advantage) that Lean 4 cannot express.
+
+    **Note:** The ECDSA soundness conjunct (`ecdsaVerify z Q sig`) does
+    NOT depend on any hash hypothesis — it follows unconditionally from
+    GKR/sumcheck composition via `zkEidas_no_root_implies_valid`. -/
 theorem zkEidas_full_soundness_or_collision [EllipticCurveGroup F] [PoseidonHash F 3]
     [PoseidonHash F 1] [LinearOrder F] [CRHash (EscrowFields F) F]
     {s NL : ℕ}
