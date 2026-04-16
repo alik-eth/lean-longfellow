@@ -354,7 +354,7 @@ theorem zkEidas_rom_soundness [Fintype F] {n d : ℕ}
 -- Section 9: Full composition narrative
 -- ============================================================
 
-/-- **Full zk-eIDAS security composition:**
+/-- **Full zk-eIDAS security composition (decomposed form):**
 
     Composes all five security properties into a single theorem:
 
@@ -369,6 +369,19 @@ theorem zkEidas_rom_soundness [Fintype F] {n d : ℕ}
        and salt (from Poseidon collision resistance).
     5. **Holder binding** — same holder hash implies same holder identity
        (from Poseidon collision resistance).
+
+    **Architectural note:** The proof body is `⟨A, B, C, D, E⟩` — five
+    independent sub-proofs. This reflects the zk-eIDAS protocol design:
+    the five properties use distinct cryptographic mechanisms (GKR/sumcheck
+    for ECDSA, Poseidon commitments for predicates/nullifiers/holders,
+    CRHash for escrow) with no shared transcript or joint witness. There
+    is no "joint knowledge extractor" because the mechanisms are independent
+    by construction.
+
+    For the **unified form** that takes a single `ZkEidasFullProof` bundle,
+    see `zkEidasFull_soundness`. For the **collision-extracting form** that
+    eliminates hash injectivity hypotheses entirely, see
+    `zkEidasFull_soundness_or_collision`.
 
     The probability that a random challenge hits a root is bounded by the
     Schwartz-Zippel lemma, which feeds into `zkEidas_fiatShamir_bound`. -/
