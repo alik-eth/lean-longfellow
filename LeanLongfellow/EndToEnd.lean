@@ -835,3 +835,165 @@ theorem zkEidas_honest_verifier_zk
     (h_col_valid : columnOpeningVerify validColProof) :
     sound ∧ isPerfectFullHVZK F n D params d :=
   ⟨h_sound, fullLongfellow_isPerfectHVZK validColProof h_col_valid⟩
+
+-- ============================================================
+-- Section 17: Shared credential witness
+-- ============================================================
+
+/-- A shared credential witness binding the five zk-eIDAS properties
+    to a SINGLE credential. Prevents mix-and-match attacks where an
+    adversary uses one credential's ECDSA signature with another
+    credential's nullifier or predicate commitment.
+
+    In the existing `zkEidas_full_soundness`, the ECDSA message `z`,
+    predicate `msg_hash`, nullifier `cred1`, holder `attr1`, and escrow
+    `original` are independent universals. Here they are unified:
+
+    - `messageHash` IS the ECDSA `z` AND the predicate `msg_hash`
+    - `credentialId` IS the nullifier `cred1`
+    - `firstAttribute` IS the holder `attr1`
+    - `escrowFields` IS the escrow `original`
+    - `sdArrayHash` IS the predicate `sd_hash` -/
+structure SharedCredentialWitness (F : Type*) [Field F] where
+  /-- Message hash — shared between ECDSA (as `z`) and predicate commitment -/
+  messageHash : F
+  /-- Credential identifier — shared between nullifier computation and credential identity -/
+  credentialId : F
+  /-- First credential attribute — used in holder binding -/
+  firstAttribute : F
+  /-- Structured data hash — from the credential, used in predicate commitment -/
+  sdArrayHash : F
+  /-- Credential fields for escrow (8-element vector) -/
+  escrowFields : EscrowFields F
+
+-- ============================================================
+-- Section 18: Shared credential soundness
+-- ============================================================
+
+/-- **Shared-credential zk-eIDAS soundness:**
+
+    The same five-property composition as `zkEidas_full_soundness`, but
+    with a `SharedCredentialWitness` that binds the inputs across all
+    five sub-protocols to a SINGLE credential:
+
+    - `w.messageHash` is BOTH the ECDSA message `z` and the predicate
+      commitment's `msg_hash`.
+    - `w.credentialId` is the nullifier's `cred1`.
+    - `w.firstAttribute` is the holder binding's `attr1`.
+    - `w.sdArrayHash` is the predicate commitment's `sd_hash`.
+    - `w.escrowFields` is the escrow's `original`.
+
+    This prevents mix-and-match attacks where an adversary combines
+    a valid ECDSA signature from one credential with a nullifier or
+    predicate commitment from a different credential. -/
+theorem zkEidas_shared_credential_soundness [EllipticCurveGroup F]
+    [PoseidonHash F 3] [PoseidonHash F 1] [LinearOrder F]
+    [CRHash (EscrowFields F) F]
+    {s NL : ℕ}
+    (w : SharedCredentialWitness F)
+    {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    -- GKR proof uses w.messageHash as the ECDSA message
+    (proof : ZkEidasProof F s NL w.messageHash Q sig)
+    (hs : 0 < 2 * s)
+    (haccept : zkEidasVerifierAccepts proof hs)
+    (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
+      ∀ diff : F[X], diff ≠ 0 → diff.natDegree ≤ 2 →
+      diff.eval ((proof.reductions k).rounds i).challenge ≠ 0)
+    -- Collision resistance
+    (hcr3 : Function.Injective (PoseidonHash.hash (F := F) (n := 3)))
+    (hcr1 : Function.Injective (PoseidonHash.hash (F := F) (n := 1)))
+    (hcr_escrow : Function.Injective (CRHash.hash (α := EscrowFields F) (β := F)))
+    -- Predicate: commitment uses w.sdArrayHash and w.messageHash
+    (spec : PredicateSpec F)
+    (claim claim' sd_hash' msg_hash' : F)
+    (commitment : F)
+    (h_comm : predicateCommitment claim w.sdArrayHash w.messageHash = commitment)
+    (h_comm' : predicateCommitment claim' sd_hash' msg_hash' = commitment)
+    (h_pred : predicateHolds spec claim)
+    -- Escrow: uses w.escrowFields
+    (decrypted : EscrowFields F) (digest : F)
+    (h_escrow_commit : escrowCommitmentCorrect w.escrowFields digest)
+    (h_escrow_verify : escrowAuthorityVerifies decrypted digest)
+    -- Nullifier: uses w.credentialId
+    (cred2 contract1 contract2 salt1 salt2 : F)
+    (h_null : nullifier w.credentialId contract1 salt1 = nullifier cred2 contract2 salt2)
+    -- Holder: uses w.firstAttribute
+    (attr2 : F)
+    (h_holder : holderBindingHash w.firstAttribute = holderBindingHash attr2) :
+    -- CONCLUSION: all five properties bind to the SAME credential
+    ecdsaVerify w.messageHash Q sig ∧
+    predicateHolds spec claim' ∧
+    w.escrowFields = decrypted ∧
+    (w.credentialId = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2) ∧
+    w.firstAttribute = attr2 :=
+  ⟨zkEidas_no_root_implies_valid proof hs haccept hno_root,
+   zkEidas_predicate_soundness spec claim w.sdArrayHash w.messageHash claim' sd_hash'
+     msg_hash' commitment hcr3 h_comm h_comm' h_pred,
+   zkEidas_escrow_integrity w.escrowFields decrypted digest hcr_escrow
+     h_escrow_commit h_escrow_verify,
+   zkEidas_nullifier_binding w.credentialId cred2 contract1 contract2 salt1 salt2 hcr3 h_null,
+   zkEidas_holder_binding w.firstAttribute attr2 hcr1 h_holder⟩
+
+-- ============================================================
+-- Section 19: Shared credential soundness (collision-extracting)
+-- ============================================================
+
+open Classical in
+/-- **Shared-credential zk-eIDAS soundness (collision-extracting):**
+
+    The same shared-credential binding as `zkEidas_shared_credential_soundness`,
+    but without assuming hash injectivity.  Either all five security properties
+    hold (bound to the single credential witness), OR a concrete collision can
+    be extracted for one of the hash functions. -/
+theorem zkEidas_shared_credential_soundness_or_collision [EllipticCurveGroup F]
+    [PoseidonHash F 3] [PoseidonHash F 1] [LinearOrder F]
+    [CRHash (EscrowFields F) F]
+    {s NL : ℕ}
+    (w : SharedCredentialWitness F)
+    {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
+    (proof : ZkEidasProof F s NL w.messageHash Q sig)
+    (hs : 0 < 2 * s)
+    (haccept : zkEidasVerifierAccepts proof hs)
+    (hno_root : ∀ k : Fin NL, ∀ i : Fin (2 * s),
+      ∀ diff : F[X], diff ≠ 0 → diff.natDegree ≤ 2 →
+      diff.eval ((proof.reductions k).rounds i).challenge ≠ 0)
+    -- Predicate: commitment uses w.sdArrayHash and w.messageHash
+    (spec : PredicateSpec F)
+    (claim claim' sd_hash' msg_hash' : F)
+    (commitment : F)
+    (h_comm : predicateCommitment claim w.sdArrayHash w.messageHash = commitment)
+    (h_comm' : predicateCommitment claim' sd_hash' msg_hash' = commitment)
+    (h_pred : predicateHolds spec claim)
+    -- Escrow: uses w.escrowFields
+    (decrypted : EscrowFields F) (digest : F)
+    (h_escrow_commit : escrowCommitmentCorrect w.escrowFields digest)
+    (h_escrow_verify : escrowAuthorityVerifies decrypted digest)
+    -- Nullifier: uses w.credentialId
+    (cred2 contract1 contract2 salt1 salt2 : F)
+    (h_null : nullifier w.credentialId contract1 salt1 = nullifier cred2 contract2 salt2)
+    -- Holder: uses w.firstAttribute
+    (attr2 : F)
+    (h_holder : holderBindingHash w.firstAttribute = holderBindingHash attr2) :
+    -- CONCLUSION: all five properties hold, OR a collision exists
+    (ecdsaVerify w.messageHash Q sig ∧
+     predicateHolds spec claim' ∧
+     w.escrowFields = decrypted ∧
+     (w.credentialId = cred2 ∧ contract1 = contract2 ∧ salt1 = salt2) ∧
+     w.firstAttribute = attr2) ∨
+    PoseidonCollision F 3 ∨ PoseidonCollision F 1 ∨
+    CRHashCollision (EscrowFields F) F := by
+  have h_ecdsa := zkEidas_no_root_implies_valid proof hs haccept hno_root
+  rcases escrow_integrity_or_collision w.escrowFields decrypted digest
+    h_escrow_commit h_escrow_verify with h_escrow | hcol_escrow
+  · rcases predicateCommitment_binding_or_collision claim claim' w.sdArrayHash sd_hash'
+      w.messageHash msg_hash' (h_comm.trans h_comm'.symm) with h_pred_bind | hcol3
+    · rcases nullifier_binding_or_collision w.credentialId cred2 contract1 contract2
+        salt1 salt2 h_null with h_null_bind | hcol3
+      · rcases holderBinding_binding_or_collision w.firstAttribute attr2 h_holder
+          with h_holder_bind | hcol1
+        · left
+          exact ⟨h_ecdsa, by rwa [← h_pred_bind.1], h_escrow, h_null_bind, h_holder_bind⟩
+        · right; right; left; exact hcol1
+      · right; left; exact hcol3
+    · right; left; exact hcol3
+  · right; right; right; exact hcol_escrow
