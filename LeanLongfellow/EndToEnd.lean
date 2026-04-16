@@ -1,5 +1,5 @@
-import LeanLongfellow.Circuit.ECDSA
-import LeanLongfellow.Circuit.Composition
+import LeanLongfellow.Circuit.ECDSA.Spec
+import LeanLongfellow.Circuit.Core.Composition
 import LeanLongfellow.Ligero.Longfellow
 import LeanLongfellow.Ligero.FiatShamir
 import LeanLongfellow.Predicate.Defs
@@ -90,7 +90,13 @@ def zkEidasVerifierAccepts [EllipticCurve F] {s NL : ℕ}
     then some sumcheck challenge hit a root of a nonzero
     degree-<=2 polynomial.
 
-    This composes: ECDSA circuit spec -> GKR composition -> root hit. -/
+    This composes: ECDSA circuit spec -> GKR composition -> root hit.
+
+    **How to read this with the probabilistic bound:** This deterministic theorem
+    and `zkEidas_fiatShamir_bound` are two halves of one argument.  This theorem
+    says "wrong claim → root hit"; the Fiat-Shamir bound says "Pr[root hit] ≤
+    n·d / |F|".  Together: Pr[verifier accepts a false statement] ≤ n·d / |F|.
+    This is the standard structure of Schwartz-Zippel-based IOP soundness proofs. -/
 theorem zkEidas_soundness_det [EllipticCurve F] {s NL : ℕ}
     {z : F} {Q : EllipticCurve.Point (F := F)} {sig : ECDSASignature F}
     (proof : ZkEidasProof F s NL z Q sig)

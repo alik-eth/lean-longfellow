@@ -15,7 +15,14 @@ only the security property matters for protocol correctness. -/
 /-- Abstract Poseidon hash with arity `n`: takes `n` field elements, returns one.
     Collision resistance is modeled as an explicit hypothesis on theorems that need
     it, rather than a class field, because `Function.Injective` is unsatisfiable
-    for `(Fin n → F) → F` over finite fields when `n ≥ 2`. -/
+    for `(Fin n → F) → F` over finite fields when `n ≥ 2`.
+
+    Theorems with `(hcr : Function.Injective ...)` are the human-readable
+    formulation.  The `_or_collision` variants (e.g.,
+    `predicateCommitment_binding_or_collision`, `zkEidas_full_soundness_or_collision`)
+    are the canonical non-vacuous formulation via collision-extracting reduction:
+    they conclude "security holds OR a concrete collision can be extracted,"
+    constituting a full security proof relative to the hash function. -/
 class PoseidonHash (F : Type*) (n : ℕ) where
   hash : (Fin n → F) → F
 
