@@ -1,4 +1,5 @@
 import LeanLongfellow.Ligero.Constraints
+import LeanLongfellow.Ligero.ECDSAModular
 import LeanLongfellow.Circuit.ECDSA.Spec
 import LeanLongfellow.Circuit.ECDSA.Circuit
 
@@ -112,9 +113,9 @@ noncomputable def ecdsaHonestWitness [EllipticCurveGroup F]
     properties needed to derive `ecdsaVerify` without any external
     `hxcoord` hypothesis.  The key idea is that the EC computation
     (scalar multiplications + point addition) is encoded structurally
-    via `ecdsaConstraint`, and the scalar-field bridges (`u1_bridge`,
-    `u2_bridge`) connect the circuit scalars to the abstract ECDSA
-    scalars in `ZMod groupOrder`.
+    via `ecdsaConstraint`, and the scalar-field bridges are derived
+    from a transparent `ECDSAScalarComputation` that decomposes the
+    modular arithmetic into verifiable sub-claims.
 
     From these fields, `ecdsaConstraint_implies_verify` directly yields
     `ecdsaVerify z Q sig`. -/
@@ -130,11 +131,11 @@ structure ECDSAWitnessValid (F : Type*) [Field F]
   constraint_sat : ecdsaConstraint CurveInstantiation.params n z
     CurveInstantiation.generatorPoint (CurveInstantiation.toECPoint Q)
     sig.r sig.s wit
-  /-- Circuit scalar u1 matches the abstract ECDSA scalar u1 = z * s⁻¹ mod n. -/
-  u1_bridge : ec.fieldToNat wit.u1 =
-    ZMod.val ((ec.fieldToNat z : ZMod ec.groupOrder) *
-      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)
-  /-- Circuit scalar u2 matches the abstract ECDSA scalar u2 = r * s⁻¹ mod n. -/
-  u2_bridge : ec.fieldToNat wit.u2 =
-    ZMod.val ((ec.fieldToNat sig.r : ZMod ec.groupOrder) *
-      ((ec.fieldToNat sig.s : ZMod ec.groupOrder))⁻¹)
+  /-- Decomposed scalar computation with explicit modular reductions. -/
+  scalar_comp : ECDSAScalarComputation F z sig
+  /-- `s` is nonzero in the scalar field (needed for inverse). -/
+  hs_nonzero : (ec.fieldToNat sig.s : ZMod ec.groupOrder) ≠ 0
+  /-- Circuit wire u1 agrees with the computed scalar. -/
+  u1_wire_eq : ec.fieldToNat wit.u1 = scalar_comp.u1_product_red.rem
+  /-- Circuit wire u2 agrees with the computed scalar. -/
+  u2_wire_eq : ec.fieldToNat wit.u2 = scalar_comp.u2_product_red.rem

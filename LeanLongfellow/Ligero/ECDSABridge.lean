@@ -159,9 +159,10 @@ theorem ecdsaWitnessValid_implies_verify [EllipticCurveGroup F] [Fintype F]
     [CurveInstantiation F]
     (z : F) (Q : EllipticCurve.Point (F := F)) (sig : ECDSASignature F)
     (n : ℕ) (wv : ECDSAWitnessValid F z Q sig n) :
-    ecdsaVerify z Q sig :=
-  ecdsaConstraint_implies_verify n z Q sig wv.wit wv.hn
-    wv.u1_bridge wv.u2_bridge wv.constraint_sat
+    ecdsaVerify z Q sig := by
+  have bridge := ecdsaScalarComputation_implies_bridge F z sig wv.scalar_comp wv.hs_nonzero
+  exact ecdsaConstraint_implies_verify n z Q sig wv.wit wv.hn
+    (by rw [wv.u1_wire_eq, bridge.1]) (by rw [wv.u2_wire_eq, bridge.2]) wv.constraint_sat
 
 -- ============================================================
 -- Section 5: Completeness (honest witness satisfies constraints)
