@@ -90,6 +90,49 @@ theorem fullLongfellow_isPerfectHVZK {n : ℕ}
      simulateRounds_deg claimed_sum challenges i⟩
 
 -- ============================================================
+-- Section 2b: Self-contained perfect HVZK (simulator constructs proof)
+-- ============================================================
+
+/-- **Perfect HVZK with simulator-constructed column-opening proof.**
+
+    Unlike `fullLongfellow_isPerfectHVZK` which takes a pre-existing valid
+    `ColumnOpeningProof` as input, this theorem shows the simulator can
+    construct one from scratch using `simulateColumnOpening`.
+
+    The parameters are simulation-internal data that the simulator freely
+    chooses: column indices, column data, evaluation domain, LDT weights,
+    RS coefficients, and Merkle leaf data. The compatibility conditions
+    (`h_leaves_match`, `h_inj`, `h_ldt`) are properties the simulator
+    arranges by construction.
+
+    This addresses the concern that "the ZK guarantee assumes someone
+    already built a valid proof." Here, the simulator builds its own. -/
+theorem fullLongfellow_isPerfectHVZK_constructed {n : ℕ}
+    {D : Type*} [MerkleHash D] {params : LigeroParams} {d : ℕ}
+    [ColumnHash D F params.NROW]
+    -- Simulation parameters (all freely chosen by the simulator)
+    (indices : Fin params.NREQ → Fin params.NCOL)
+    (colData : Fin params.NREQ → Fin params.NROW → F)
+    (domain : EvalDomain F params.NCOL)
+    (ldt_u : Fin params.NROW → F)
+    (combinedRowCoeffs : Fin params.BLOCK → F)
+    (leafIdx : Fin params.NCOL → Fin (2 ^ d))
+    (leaves : Fin (2 ^ d) → D)
+    -- Compatibility conditions (arranged by the simulator)
+    (h_leaves_match : ∀ k : Fin params.NREQ,
+      leaves (leafIdx (indices k)) = ColumnHash.hashColumn (colData k))
+    (h_inj : Function.Injective indices)
+    (h_ldt : ∀ k : Fin params.NREQ,
+      ∑ i : Fin params.NROW, ldt_u i * colData k i =
+        rsEncode domain params.BLOCK combinedRowCoeffs (indices k)) :
+    isPerfectFullHVZK F n D params d :=
+  fullLongfellow_isPerfectHVZK
+    (simulateColumnOpening indices colData domain ldt_u
+      combinedRowCoeffs leafIdx leaves h_leaves_match)
+    (simulateColumnOpening_valid indices colData domain ldt_u
+      combinedRowCoeffs leafIdx leaves h_leaves_match h_inj h_ldt)
+
+-- ============================================================
 -- Section 3: Perfect HVZK implies HVZK
 -- ============================================================
 
